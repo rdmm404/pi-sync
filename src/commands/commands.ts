@@ -9,8 +9,15 @@ import {
   DEFAULT_BRANCH,
   NO_DIFF_MESSAGE,
 } from "../domain/constants.js";
-import type { CommandOptions, Snapshot, SyncState } from "../domain/types.js";
+import type {
+  CommandOptions,
+  Snapshot,
+  SyncConfig,
+  SyncState,
+} from "../domain/types.js";
 import { GitStore, syncPathspecs } from "../git/store.js";
+import { effectivePolicy } from "../policy/policy.js";
+import { isPortableSettingsEntry, settingsEntrySource } from "../settings/settings.js";
 import { formatGitTextDiff } from "../snapshot/diff.js";
 import {
   createSnapshot,
@@ -29,7 +36,7 @@ import {
   remoteChangedSinceState,
 } from "../state/state.js";
 import { errorMessage } from "../utils/json-utils.js";
-import { localConfigPath, repoDir, stateDir } from "../utils/path-utils.js";
+import { agentDir, localConfigPath, lockPath, repoDir, stateDir } from "../utils/path-utils.js";
 import { isEnabled, parseOptions, splitArgs, usage } from "./args.js";
 import { repositoryAccessReport } from "./auth.js";
 import { syncInputs } from "./context.js";
@@ -236,12 +243,25 @@ async function doctor(ctx: ExtensionCommandContext): Promise<void> {
   const messages: string[] = [];
   let level: "info" | "warning" = "info";
 
+  let config: SyncConfig | undefined;
+
+  messages.push(`pi dir: ${agentDir()}`);
+  messages.push(`config path: ${localConfigPath()}`);
+  messages.push(`state dir: ${stateDir()}`);
+  messages.push(`repo dir: ${repoDir()}`);
+  messages.push(`backup dir: ${path.join(stateDir(), "backups")}`);
+  messages.push(`lock path: ${lockPath()}`);
+
   try {
-    const config = await loadConfig();
+    config = await loadConfig();
+    const policy = effectivePolicy(config.policy);
 
     messages.push(
       `config: ok (${config.repository}#${config.branch}/repo-root)`,
     );
+    messages.push(`policy includeDefaults: ${policy.policy.includeDefaults}`);
+    messages.push(`policy includes: ${policy.included.map((item) => item.path).join(", ") || "none"}`);
+    messages.push(`policy excludes: ${policy.excluded.join(", ") || "none"}`);
     const accessReport = await repositoryAccessReport(config.repository);
 
     messages.push(...accessReport);
@@ -261,7 +281,7 @@ async function doctor(ctx: ExtensionCommandContext): Promise<void> {
     messages.push(`config/git: ${errorMessage(error)}`);
   }
 
-  await appendLocalChecks(messages);
+  await appendLocalChecks(messages, config);
   ctx.ui.notify(messages.join("\n"), level);
 }
 
@@ -312,8 +332,11 @@ async function unlock(
   ctx.ui.notify("Removed stale pi-sync lock.", "info");
 }
 
-async function appendLocalChecks(messages: string[]): Promise<void> {
-  const local = await createSnapshot();
+async function appendLocalChecks(
+  messages: string[],
+  config: SyncConfig | undefined,
+): Promise<void> {
+  const local = await createSnapshot(config?.policy);
   const secrets = scanSnapshot(local);
   const lock = await readLock();
 
@@ -324,9 +347,66 @@ async function appendLocalChecks(messages: string[]): Promise<void> {
     messages.push(`secret scan: ok (${local.files.length} files checked)`);
   }
 
+  if (local.warnings != null && local.warnings.length > 0) {
+    messages.push("symlinks:");
+    messages.push(...local.warnings.map((warning) => `- ${warning}`));
+  } else {
+    messages.push("symlinks: none under managed paths");
+  }
+
+  messages.push(...(await settingsDoctorLines(config)));
+
   messages.push(
     lock != null
       ? `lock: held by pid ${lock.pid} since ${lock.startedAt}`
       : "lock: free",
   );
+}
+
+async function settingsDoctorLines(
+  config: SyncConfig | undefined,
+): Promise<string[]> {
+  const settingsPath = path.join(agentDir(), "settings.json");
+
+  try {
+    const settings = JSON.parse(await fs.readFile(settingsPath, "utf8")) as Record<string, unknown>;
+    const localOnly = [
+      ...localOnlyEntries("packages", settings.packages, config),
+      ...localOnlyEntries("extensions", settings.extensions, config),
+      ...localOnlyEntries("skills", settings.skills, config),
+      ...localOnlyEntries("prompts", settings.prompts, config),
+      ...localOnlyEntries("themes", settings.themes, config),
+    ];
+
+    return [
+      `settings lastChangelogVersion: ${"lastChangelogVersion" in settings ? "present locally, stripped from sync" : "absent"}`,
+      localOnly.length > 0
+        ? `settings local-only entries: ${localOnly.join(", ")}`
+        : "settings local-only entries: none detected",
+    ];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return ["settings: settings.json not found"];
+    }
+
+    return [`settings: ${errorMessage(error)}`];
+  }
+}
+
+function localOnlyEntries(
+  key: string,
+  value: unknown,
+  config: SyncConfig | undefined,
+): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (isPortableSettingsEntry(entry, config?.policy)) {
+      return [];
+    }
+
+    return [`${key}:${settingsEntrySource(entry) ?? "<object>"}`];
+  });
 }

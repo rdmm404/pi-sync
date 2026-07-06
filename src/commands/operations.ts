@@ -247,7 +247,7 @@ export class SyncOperations {
   async checkout(): Promise<void> {
     const target = this.options.args[0];
 
-    if (target === "") {
+    if (target == null || target.trim() === "") {
       throw new Error("Usage: /pisync checkout <commit-ish> [--yes]");
     }
 
