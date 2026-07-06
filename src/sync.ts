@@ -74,7 +74,9 @@ async function autoSync(
     await loadConfig();
 
     if (!isEnabled(partial.autoSync ?? process.env.PI_SYNC_AUTO_SYNC, true)) {
-      await refreshSyncFooter(ctx);
+      await withLock("status", async () => {
+        await refreshSyncFooter(ctx);
+      });
 
       return;
     }
