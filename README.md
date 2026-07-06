@@ -106,15 +106,30 @@ The generated local-only file is stored at:
 ~/.pi/agent/pi-sync.json
 ```
 
+If `PI_CODING_AGENT_DIR` is set, pi-sync uses that directory instead of `~/.pi/agent`. Changing `PI_CODING_AGENT_DIR` is treated as a separate config universe: the config file, `.pisync` state, local Git clone, lock, and backups all live under the resolved Pi dir and are not migrated automatically.
+
 Example:
 
 ```json
 {
   "repository": "https://github.com/<user>/<repo>.git",
   "branch": "main",
-  "autoSync": true
+  "autoSync": true,
+  "policy": {
+    "includeDefaults": true,
+    "includePaths": [],
+    "excludePaths": ["extensions/work-only"]
+  }
 }
 ```
+
+Policy fields are optional:
+
+- `includeDefaults`: defaults to `true`; includes the standard pi-sync files and dirs.
+- `includePaths`: extra relative paths under the Pi dir to sync.
+- `excludePaths`: relative paths under the Pi dir to skip; excludes win over includes.
+
+Use blacklist mode by keeping `includeDefaults: true` and adding excludes. Use whitelist mode by setting `includeDefaults: false` and listing only the paths you want in `includePaths`.
 
 For GitHub HTTPS repositories, `/pisync init` can optionally run `gh auth setup-git` after confirming with you. This lets Git reuse your existing GitHub CLI login. SSH URLs still require normal SSH key and ssh-agent setup.
 
@@ -181,7 +196,7 @@ Common states:
 
 ## What is synced
 
-The extension syncs allowlisted files from `~/.pi/agent` into the root of the configured Git repo:
+The extension syncs allowlisted files from the resolved Pi agent directory into the root of the configured Git repo. By default, this is `~/.pi/agent`:
 
 ```text
 settings.json
@@ -194,14 +209,26 @@ themes/
 extensions/
 ```
 
-It excludes `.env*`, `node_modules`, `.git`, `.pisync`, `pi-sync.json`, and paths containing `secret` or `token`, and it refuses to push common API-key patterns. `/pisync diff` and confirmation prompts use textual `git diff --no-index` output between remote files and local files.
+It excludes `.env*`, `node_modules`, `.git`, `.pisync`, `pi-sync.json`, and paths containing `secret` or `token`, and it refuses to push common API-key patterns. Policy excludes are applied in addition to those hard safety denies. `/pisync diff` and confirmation prompts use textual `git diff --no-index` output between remote files and local files.
+
+### Settings and packages
+
+`settings.json` is sanitized before sync and merged on pull:
+
+- `lastChangelogVersion` is stripped from synced settings.
+- Portable package sources are synced, including npm package names, `npm:`, `git:`, HTTPS Git URLs, and SSH Git URLs.
+- Relative local paths are synced only when they stay inside the Pi dir and point at policy-included paths.
+- Absolute paths, `~` paths, `file:` paths, and paths escaping the Pi dir are treated as machine-local and preserved locally during pulls.
+
+If one machine adds a portable npm/git package to synced settings, another machine receives the settings entry on pull. Pi installs/loads missing remote packages during reload or startup; pi-sync itself updates settings and prompts for reload.
 
 ## Safety
 
 - Use a private Git repository for synced Pi config.
-- Local state, clone cache, locks, and backups live under `~/.pi/agent/.pisync/`.
+- Local state, clone cache, locks, and backups live under the resolved Pi dir's `.pisync/` directory.
 - Pull and checkout create local backups before changing files.
-- Pull and checkout apply normal Git-tracked files while still preflighting paths and refusing symlink escapes.
+- Pull and checkout apply normal Git-tracked files while still preflighting paths.
+- Symlinks are warned about and skipped. pi-sync does not follow symlinks, overwrite symlink targets, or write/delete through symlinked parents.
 - Checkout restores a previous commit locally without changing the remote branch; use `/pisync push` afterwards only if you want to publish that checked-out state as a new commit.
 - Auto-sync is enabled by default but never pushes local changes automatically; it only pulls safe remote changes or asks you to resolve conflicts manually.
 - Secret scanning is best-effort. Do not intentionally store API keys or tokens in synced Pi config.
