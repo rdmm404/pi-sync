@@ -78,6 +78,7 @@ async function preflightSnapshotMutations(
   const warnings: string[] = [];
   const deletePaths = new Set(plan.deletes);
   const safeDeletes: string[] = [];
+  const skippedDeletes = new Set<string>();
   const safeWrites: typeof plan.writes = [];
 
   for (const target of plan.deletes) {
@@ -87,6 +88,7 @@ async function preflightSnapshotMutations(
       safeDeletes.push(target);
     } else {
       warnings.push(warning);
+      skippedDeletes.add(target);
       deletePaths.delete(target);
     }
   }
@@ -96,6 +98,13 @@ async function preflightSnapshotMutations(
 
     if (warning != null) {
       warnings.push(warning);
+      continue;
+    }
+
+    if (skippedDeletes.has(item.target)) {
+      warnings.push(
+        `apply: skipped write requiring unsafe delete ${item.target}`,
+      );
       continue;
     }
 

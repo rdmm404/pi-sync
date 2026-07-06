@@ -32,6 +32,7 @@ import {
 } from "../state/lock.js";
 import {
   changedPaths,
+  comparableStateHashes,
   hasLocalChanges,
   remoteChangedSinceState,
 } from "../state/state.js";
@@ -160,7 +161,7 @@ async function status(
   const { config, local, remote, state } = await syncInputs();
 
   setSyncFooter(ctx, local, remote, state);
-  const localChanged = hasLocalChanges(local, state);
+  const localChanged = hasLocalChanges(local, state, remote);
   const remoteChanged = remoteChangedSinceState(remote, state);
   const remoteCommit = await new GitStore(config).currentCommit();
   const drift = syncDrift(local, remote, state);
@@ -206,10 +207,11 @@ function verboseStatusLines(
   remote: Snapshot | undefined,
   state: SyncState,
 ): string[] {
-  const localPaths = changedPaths(fileHashMap(local), state.lastFileHashes);
+  const stateHashes = comparableStateHashes(local, remote, state);
+  const localPaths = changedPaths(fileHashMap(local), stateHashes);
   const remotePaths = changedPaths(
     remote != null ? fileHashMap(remote) : {},
-    state.lastFileHashes,
+    stateHashes,
   );
 
   return [

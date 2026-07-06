@@ -40,8 +40,12 @@ export async function writeSyncState(
  * @param local Current local snapshot.
  * @param state Persisted sync state.
  */
-export function hasLocalChanges(local: Snapshot, state: SyncState): boolean {
-  return !sameHashes(fileHashMap(local), state.lastFileHashes);
+export function hasLocalChanges(
+  local: Snapshot,
+  state: SyncState,
+  remote?: Snapshot,
+): boolean {
+  return !sameHashes(fileHashMap(local), comparableStateHashes(local, remote, state));
 }
 
 /**
@@ -72,6 +76,27 @@ export function changedPaths(
   const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
 
   return [...keys].filter((key) => left[key] !== right[key]).sort();
+}
+
+/**
+ * Count paths whose hashes differ between two snapshots or state maps.
+ *
+ * @param left First hash map.
+ * @param right Second hash map.
+ */
+export function comparableStateHashes(
+  local: Snapshot,
+  remote: Snapshot | undefined,
+  state: SyncState,
+): Record<string, string> {
+  const activePaths = new Set([
+    ...Object.keys(fileHashMap(local)),
+    ...Object.keys(remote != null ? fileHashMap(remote) : {}),
+  ]);
+
+  return Object.fromEntries(
+    Object.entries(state.lastFileHashes).filter(([key]) => activePaths.has(key)),
+  );
 }
 
 /**

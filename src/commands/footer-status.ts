@@ -6,7 +6,7 @@ import type {
 import { STATUS_KEY } from "../domain/constants.js";
 import type { Snapshot, SyncState } from "../domain/types.js";
 import { fileHashMap } from "../snapshot/snapshot.js";
-import { changedPathCount } from "../state/state.js";
+import { changedPathCount, comparableStateHashes } from "../state/state.js";
 import { syncInputs } from "./context.js";
 
 export type SyncDrift = {
@@ -90,11 +90,13 @@ export function syncDrift(
   remote: Snapshot | undefined,
   state: SyncState,
 ): SyncDrift {
+  const stateHashes = comparableStateHashes(local, remote, state);
+
   return {
-    local: changedPathCount(fileHashMap(local), state.lastFileHashes),
+    local: changedPathCount(fileHashMap(local), stateHashes),
     remote: changedPathCount(
       remote != null ? fileHashMap(remote) : {},
-      state.lastFileHashes,
+      stateHashes,
     ),
   };
 }

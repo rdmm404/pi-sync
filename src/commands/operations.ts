@@ -150,7 +150,7 @@ export class SyncOperations {
     const { config, local, remote, state } = await syncInputs();
 
     setSyncFooter(this.ctx, local, remote, state);
-    const localChanged = hasLocalChanges(local, state);
+    const localChanged = hasLocalChanges(local, state, remote);
     const remoteChanged = remoteChangedSinceState(remote, state);
     const firstSync = state.lastAppliedSnapshot == null;
 
@@ -195,7 +195,7 @@ export class SyncOperations {
     const { config, local, remote, state } = await syncInputs();
 
     setSyncFooter(this.ctx, local, remote, state);
-    const localChanged = hasLocalChanges(local, state);
+    const localChanged = hasLocalChanges(local, state, remote);
     const remoteChanged = remoteChangedSinceState(remote, state);
     const firstSync = state.lastAppliedSnapshot == null;
 
@@ -416,7 +416,7 @@ function hasDiverged(
   state: SyncInputs["state"],
 ): boolean {
   return (
-    hasLocalChanges(local, state) &&
+    hasLocalChanges(local, state, remote) &&
     remote.id !== state.lastAppliedSnapshot &&
     state.lastAppliedSnapshot != null
   );
