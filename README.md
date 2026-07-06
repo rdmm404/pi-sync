@@ -222,6 +222,11 @@ It excludes `.env*`, `node_modules`, `.git`, `.pisync`, `pi-sync.json`, and path
 
 If one machine adds a portable npm/git package to synced settings, another machine receives the settings entry on pull. Pi installs/loads missing remote packages during reload or startup; pi-sync itself updates settings and prompts for reload.
 
+### Current limitations
+
+- Named profiles are not supported yet. Use policy includes/excludes or separate `PI_CODING_AGENT_DIR` values for now.
+- Conflict UX is intentionally unchanged. Use `/pisync status --verbose` or `/pisync diff`, then resolve manually with `/pisync push --force` or `/pisync pull --force`.
+
 ## Safety
 
 - Use a private Git repository for synced Pi config.
