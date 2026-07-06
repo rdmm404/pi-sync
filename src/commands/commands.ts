@@ -259,9 +259,16 @@ async function doctor(ctx: ExtensionCommandContext): Promise<void> {
     messages.push(
       `config: ok (${config.repository}#${config.branch}/repo-root)`,
     );
+    const includedPaths = policy.included.map((item) => item.path).join(", ");
+    const excludedPaths = policy.excluded.join(", ");
+
     messages.push(`policy includeDefaults: ${policy.policy.includeDefaults}`);
-    messages.push(`policy includes: ${policy.included.map((item) => item.path).join(", ") || "none"}`);
-    messages.push(`policy excludes: ${policy.excluded.join(", ") || "none"}`);
+    messages.push(
+      `policy includes: ${includedPaths !== "" ? includedPaths : "none"}`,
+    );
+    messages.push(
+      `policy excludes: ${excludedPaths !== "" ? excludedPaths : "none"}`,
+    );
     const accessReport = await repositoryAccessReport(config.repository);
 
     messages.push(...accessReport);

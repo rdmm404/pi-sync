@@ -181,7 +181,7 @@ async function writeMergedSettings(
     }
   }
 
-  const incomingSettings = JSON.parse(incomingContent.toString("utf8"));
+  const incomingSettings: unknown = JSON.parse(incomingContent.toString("utf8"));
   const merged = mergeSettings(localSettings, incomingSettings, policy);
 
   await fs.writeFile(target, `${JSON.stringify(merged, null, "\t")}\n`);
@@ -289,40 +289,3 @@ async function ensureDirectorySegment(current: string): Promise<void> {
   }
 }
 
-async function assertNoSymlinkParents(
-  root: string,
-  target: string,
-): Promise<void> {
-  const rootPath = path.resolve(root);
-  const relative = path.relative(rootPath, path.resolve(target));
-  let current = rootPath;
-
-  safeJoin(root, relative);
-
-  for (const part of relative
-    .split(path.sep)
-    .filter((item) => item !== "")
-    .slice(0, -1)) {
-    current = path.join(current, part);
-
-    try {
-      const stat = await fs.lstat(current);
-
-      if (stat.isSymbolicLink()) {
-        throw new Error(
-          `Refusing to follow symlink during snapshot apply: ${current}`,
-        );
-      }
-
-      if (!stat.isDirectory()) {
-        throw new Error(`Snapshot path parent is not a directory: ${current}`);
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return;
-      }
-
-      throw error;
-    }
-  }
-}

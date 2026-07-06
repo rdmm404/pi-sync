@@ -245,9 +245,9 @@ export class SyncOperations {
    * Check out a previous Git commit-ish into local Pi config without changing remote.
    */
   async checkout(): Promise<void> {
-    const target = this.options.args[0];
+    const [target = ""] = this.options.args;
 
-    if (target == null || target.trim() === "") {
+    if (target.trim() === "") {
       throw new Error("Usage: /pisync checkout <commit-ish> [--yes]");
     }
 
@@ -286,6 +286,7 @@ export class SyncOperations {
     const backup = await backupLocal(config);
 
     const warnings = await applySnapshot(remote, config.policy);
+
     await writeSyncState(remote, await new GitStore(config).currentCommit());
     await refreshSyncFooter(this.ctx);
     this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
@@ -360,6 +361,7 @@ export class SyncOperations {
     const backup = await backupLocal(config);
 
     const warnings = await applySnapshot(remote, config.policy);
+
     await refreshSyncFooter(this.ctx);
     this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
     this.ctx.ui.notify(

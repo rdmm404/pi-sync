@@ -4,7 +4,6 @@ import type { SyncPolicy } from "../domain/types.js";
 import { effectivePolicy, isIncludedByPolicy } from "../policy/policy.js";
 import { agentDir, toPosix } from "../utils/path-utils.js";
 
-const STRIPPED_SETTINGS_KEYS = new Set(["lastChangelogVersion"]);
 const RESOURCE_ARRAY_KEYS = ["packages", "extensions", "skills", "prompts", "themes"];
 
 type JsonObject = Record<string, unknown>;
@@ -17,11 +16,9 @@ export function sanitizeSettings(settings: unknown, policy?: SyncPolicy): JsonOb
     throw new Error("settings.json must contain a JSON object");
   }
 
-  const sanitized: JsonObject = { ...settings };
-
-  for (const key of STRIPPED_SETTINGS_KEYS) {
-    delete sanitized[key];
-  }
+  const sanitized = Object.fromEntries(
+    Object.entries(settings).filter(([key]) => key !== "lastChangelogVersion"),
+  );
 
   for (const key of RESOURCE_ARRAY_KEYS) {
     const value = sanitized[key];
@@ -61,12 +58,8 @@ export function mergeSettings(
     merged[key] = mergeUniqueEntries(incomingValue, localOnly);
   }
 
-  for (const key of STRIPPED_SETTINGS_KEYS) {
-    if (key in local) {
-      merged[key] = local[key];
-    } else {
-      delete merged[key];
-    }
+  if ("lastChangelogVersion" in local) {
+    merged.lastChangelogVersion = local.lastChangelogVersion;
   }
 
   return merged;
@@ -85,6 +78,9 @@ export function isPortableSettingsEntry(entry: unknown, policy?: SyncPolicy): bo
   return isPortableSource(source, policy);
 }
 
+/**
+ * Extract the source string from a string or object-shaped settings entry.
+ */
 export function settingsEntrySource(entry: unknown): string | undefined {
   if (typeof entry === "string") {
     return entry;
