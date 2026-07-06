@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { Snapshot, SyncPolicy } from "../domain/types.js";
 import { effectivePolicy, isIncludedByPolicy } from "../policy/policy.js";
+import { mergeSettings } from "../settings/settings.js";
 import { agentDir, safeJoin, toPosix } from "../utils/path-utils.js";
 import { createSnapshot, decodeBase64Strict, hashBuffer, isDeniedPath } from "./snapshot.js";
 
@@ -22,7 +23,13 @@ export async function applySnapshot(snapshot: Snapshot, policy?: SyncPolicy): Pr
   }
 
   for (const item of plan.writes) {
-    await fs.writeFile(item.target, item.content);
+    await fs.mkdir(path.dirname(item.target), { recursive: true });
+
+    if (item.relativePath === "settings.json") {
+      await writeMergedSettings(item.target, item.content, policy);
+    } else {
+      await fs.writeFile(item.target, item.content);
+    }
   }
 }
 
@@ -38,10 +45,10 @@ export function preflightSnapshotApply(
   snapshot: Snapshot,
   current: Snapshot,
   policy?: SyncPolicy,
-): { writes: { target: string; content: Buffer }[]; deletes: string[] } {
+): { writes: { relativePath: string; target: string; content: Buffer }[]; deletes: string[] } {
   const remotePaths = new Set<string>();
   const effective = effectivePolicy(policy);
-  const writes: { target: string; content: Buffer }[] = [];
+  const writes: { relativePath: string; target: string; content: Buffer }[] = [];
 
   for (const file of snapshot.files) {
     const normalized = validateSnapshotPath(file.path, remotePaths);
@@ -56,7 +63,7 @@ export function preflightSnapshotApply(
       throw new Error(`Checksum mismatch in snapshot file: ${normalized}`);
     }
 
-    writes.push({ target: safeJoin(root, normalized), content });
+    writes.push({ relativePath: normalized, target: safeJoin(root, normalized), content });
   }
 
   return { writes, deletes: staleLocalPaths(root, current, remotePaths, policy) };
@@ -132,6 +139,27 @@ function staleLocalPaths(
   }
 
   return [...deletePaths];
+}
+
+async function writeMergedSettings(
+  target: string,
+  incomingContent: Buffer,
+  policy?: SyncPolicy,
+): Promise<void> {
+  let localSettings: unknown = {};
+
+  try {
+    localSettings = JSON.parse(await fs.readFile(target, "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  const incomingSettings = JSON.parse(incomingContent.toString("utf8"));
+  const merged = mergeSettings(localSettings, incomingSettings, policy);
+
+  await fs.writeFile(target, `${JSON.stringify(merged, null, "\t")}\n`);
 }
 
 async function prepareSnapshotWrite(

@@ -6,6 +6,7 @@ import path from "node:path";
 import { SECRET_PATTERNS, VERSION } from "../domain/constants.js";
 import type { Snapshot, SnapshotFile, SyncPolicy } from "../domain/types.js";
 import { effectivePolicy, isIncludedByPolicy } from "../policy/policy.js";
+import { sanitizeSettings } from "../settings/settings.js";
 import { agentDir, posixJoin, safeJoin, toPosix } from "../utils/path-utils.js";
 
 /**
@@ -149,7 +150,7 @@ async function collectFiles(root: string, policy?: SyncPolicy): Promise<Snapshot
       if (stat.isDirectory()) {
         await collectDirectory(results, root, managedPath.path, effective);
       } else if (stat.isFile()) {
-        await addFile(results, root, managedPath.path);
+        await addFile(results, root, managedPath.path, policy);
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -183,7 +184,7 @@ async function collectDirectory(
     if (entry.isDirectory()) {
       await collectDirectory(results, root, relativePath, policy);
     } else if (entry.isFile()) {
-      await addFile(results, root, relativePath);
+      await addFile(results, root, relativePath, policy.policy);
     }
   }
 }
@@ -192,18 +193,35 @@ async function addFile(
   results: SnapshotFile[],
   root: string,
   relativePath: string,
+  policy?: SyncPolicy,
 ): Promise<void> {
   if (isDeniedPath(relativePath)) {
     return;
   }
 
-  const content = await fs.readFile(safeJoin(root, relativePath));
+  const content = await readSnapshotContent(root, relativePath, policy);
 
   results.push({
     path: relativePath,
     contentBase64: content.toString("base64"),
     sha256: hashBuffer(content),
   });
+}
+
+async function readSnapshotContent(
+  root: string,
+  relativePath: string,
+  policy?: SyncPolicy,
+): Promise<Buffer> {
+  const raw = await fs.readFile(safeJoin(root, relativePath));
+
+  if (relativePath !== "settings.json") {
+    return raw;
+  }
+
+  return Buffer.from(
+    `${JSON.stringify(sanitizeSettings(JSON.parse(raw.toString("utf8")), policy), null, "\t")}\n`,
+  );
 }
 
 async function materializeFile(
