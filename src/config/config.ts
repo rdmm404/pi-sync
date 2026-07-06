@@ -1,5 +1,6 @@
 import { DEFAULT_BRANCH } from "../domain/constants.js";
 import type { PartialConfig, SyncConfig } from "../domain/types.js";
+import { normalizePolicy } from "../policy/policy.js";
 import { readJsonIfExists } from "../utils/json-utils.js";
 import { localConfigPath } from "../utils/path-utils.js";
 
@@ -20,6 +21,7 @@ export async function loadConfig(): Promise<SyncConfig> {
     repository,
     branch: partial.branch ?? DEFAULT_BRANCH,
     autoSync: partial.autoSync ?? true,
+    policy: normalizePolicy(partial.policy),
   };
 }
 

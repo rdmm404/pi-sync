@@ -1,13 +1,27 @@
+export type SyncPolicy = {
+  includeDefaults?: boolean;
+  includePaths?: string[];
+  excludePaths?: string[];
+};
+
+export type NormalizedSyncPolicy = {
+  includeDefaults: boolean;
+  includePaths: string[];
+  excludePaths: string[];
+};
+
 export type SyncConfig = {
   repository: string;
   branch: string;
   autoSync: boolean | string;
+  policy: NormalizedSyncPolicy;
 };
 
 export type PartialConfig = {
   repository?: string;
   branch?: string;
   autoSync?: boolean | string;
+  policy?: SyncPolicy;
 };
 
 export type SnapshotFile = {
