@@ -11,12 +11,12 @@ import { createSnapshot, decodeBase64Strict, hashBuffer, isDeniedPath } from "./
  *
  * @param snapshot
  */
-export async function applySnapshot(snapshot: Snapshot, policy?: SyncPolicy): Promise<void> {
+export async function applySnapshot(snapshot: Snapshot, policy?: SyncPolicy): Promise<string[]> {
   const root = agentDir();
   const current = await createSnapshot(policy);
   const plan = preflightSnapshotApply(root, snapshot, current, policy);
 
-  await preflightSnapshotMutations(root, plan);
+  const warnings = await preflightSnapshotMutations(root, plan);
 
   for (const target of plan.deletes) {
     await fs.rm(target, { force: true, recursive: true });
@@ -31,6 +31,8 @@ export async function applySnapshot(snapshot: Snapshot, policy?: SyncPolicy): Pr
       await fs.writeFile(item.target, item.content);
     }
   }
+
+  return warnings;
 }
 
 /**
@@ -72,16 +74,39 @@ export function preflightSnapshotApply(
 async function preflightSnapshotMutations(
   root: string,
   plan: { deletes: string[]; writes: { target: string; content: Buffer }[] },
-): Promise<void> {
+): Promise<string[]> {
+  const warnings: string[] = [];
   const deletePaths = new Set(plan.deletes);
+  const safeDeletes: string[] = [];
+  const safeWrites: typeof plan.writes = [];
 
   for (const target of plan.deletes) {
-    await assertNoSymlinkParents(root, target);
+    const warning = await symlinkMutationWarning(root, target, "delete");
+
+    if (warning == null) {
+      safeDeletes.push(target);
+    } else {
+      warnings.push(warning);
+      deletePaths.delete(target);
+    }
   }
 
   for (const item of plan.writes) {
+    const warning = await symlinkMutationWarning(root, item.target, "write");
+
+    if (warning != null) {
+      warnings.push(warning);
+      continue;
+    }
+
     await prepareSnapshotWrite(root, item.target, deletePaths);
+    safeWrites.push(item);
   }
+
+  plan.deletes.splice(0, plan.deletes.length, ...safeDeletes);
+  plan.writes.splice(0, plan.writes.length, ...safeWrites);
+
+  return warnings;
 }
 
 function validateSnapshotPath(
@@ -160,6 +185,42 @@ async function writeMergedSettings(
   const merged = mergeSettings(localSettings, incomingSettings, policy);
 
   await fs.writeFile(target, `${JSON.stringify(merged, null, "\t")}\n`);
+}
+
+async function symlinkMutationWarning(
+  root: string,
+  target: string,
+  action: "delete" | "write",
+): Promise<string | undefined> {
+  const rootPath = path.resolve(root);
+  const relative = path.relative(rootPath, path.resolve(target));
+  let current = rootPath;
+
+  safeJoin(root, relative);
+
+  const parts = relative.split(path.sep).filter((item) => item !== "");
+
+  for (const [index, part] of parts.entries()) {
+    current = path.join(current, part);
+
+    try {
+      const stat = await fs.lstat(current);
+
+      if (stat.isSymbolicLink()) {
+        const symlinkType = index === parts.length - 1 ? "target" : "parent";
+
+        return `apply: skipped ${action} through symlink ${symlinkType} ${current}`;
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return undefined;
+      }
+
+      throw error;
+    }
+  }
+
+  return undefined;
 }
 
 async function prepareSnapshotWrite(

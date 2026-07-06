@@ -36,6 +36,7 @@ export type Snapshot = {
   createdAt: string;
   machine: string;
   files: SnapshotFile[];
+  warnings?: string[];
 };
 
 export type SyncState = {

@@ -62,6 +62,7 @@ export class SyncOperations {
     const { config, local, remote, state } = await syncInputs();
 
     setSyncFooter(this.ctx, local, remote, state);
+    this.notifySnapshotWarnings(local);
     const secrets = scanSnapshot(local);
 
     if (secrets.length > 0) {
@@ -284,15 +285,18 @@ export class SyncOperations {
   ): Promise<void> {
     const backup = await backupLocal(config);
 
-    await applySnapshot(remote, config.policy);
+    const warnings = await applySnapshot(remote, config.policy);
     await writeSyncState(remote, await new GitStore(config).currentCommit());
     await refreshSyncFooter(this.ctx);
     this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
 
     if (!this.options.silent) {
       this.ctx.ui.notify(
-        `Pulled ${remote.files.length} files from ${remote.id}. Backup: ${backup}`,
-        "info",
+        [
+          `Pulled ${remote.files.length} files from ${remote.id}. Backup: ${backup}`,
+          ...warnings,
+        ].join("\n"),
+        warnings.length > 0 ? "warning" : "info",
       );
     }
 
@@ -355,14 +359,26 @@ export class SyncOperations {
   ): Promise<void> {
     const backup = await backupLocal(config);
 
-    await applySnapshot(remote, config.policy);
+    const warnings = await applySnapshot(remote, config.policy);
     await refreshSyncFooter(this.ctx);
     this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
     this.ctx.ui.notify(
-      `Checked out ${remote.id} locally. Remote was not changed. Backup: ${backup}\nLocal files now differ from latest remote; auto-sync will not push them. Run /pisync pull to return to remote latest, or /pisync push to publish this state.`,
-      "info",
+      [
+        `Checked out ${remote.id} locally. Remote was not changed. Backup: ${backup}`,
+        "Local files now differ from latest remote; auto-sync will not push them. Run /pisync pull to return to remote latest, or /pisync push to publish this state.",
+        ...warnings,
+      ].join("\n"),
+      warnings.length > 0 ? "warning" : "info",
     );
     await this.maybeReload();
+  }
+
+  private notifySnapshotWarnings(snapshot: Snapshot): void {
+    if (snapshot.warnings == null || snapshot.warnings.length === 0 || this.options.silent) {
+      return;
+    }
+
+    this.ctx.ui.notify(snapshot.warnings.join("\n"), "warning");
   }
 
   private async maybeReload(): Promise<void> {

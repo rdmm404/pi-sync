@@ -13,7 +13,8 @@ import { agentDir, posixJoin, safeJoin, toPosix } from "../utils/path-utils.js";
  * Create a snapshot from the local Pi agent configuration.
  */
 export async function createSnapshot(policy?: SyncPolicy): Promise<Snapshot> {
-  const files = await collectFiles(agentDir(), policy);
+  const warnings: string[] = [];
+  const files = await collectFiles(agentDir(), policy, warnings);
 
   return {
     version: VERSION,
@@ -21,6 +22,7 @@ export async function createSnapshot(policy?: SyncPolicy): Promise<Snapshot> {
     createdAt: new Date().toISOString(),
     machine: os.hostname(),
     files,
+    warnings,
   };
 }
 
@@ -133,7 +135,11 @@ export function fileHashMap(snapshot: Snapshot): Record<string, string> {
   );
 }
 
-async function collectFiles(root: string, policy?: SyncPolicy): Promise<SnapshotFile[]> {
+async function collectFiles(
+  root: string,
+  policy: SyncPolicy | undefined,
+  warnings: string[],
+): Promise<SnapshotFile[]> {
   const results: SnapshotFile[] = [];
   const effective = effectivePolicy(policy);
 
@@ -147,8 +153,10 @@ async function collectFiles(root: string, policy?: SyncPolicy): Promise<Snapshot
     try {
       const stat = await fs.lstat(absolutePath);
 
-      if (stat.isDirectory()) {
-        await collectDirectory(results, root, managedPath.path, effective);
+      if (stat.isSymbolicLink()) {
+        warnings.push(`snapshot: skipped symlink ${managedPath.path}`);
+      } else if (stat.isDirectory()) {
+        await collectDirectory(results, root, managedPath.path, effective, warnings);
       } else if (stat.isFile()) {
         await addFile(results, root, managedPath.path, policy);
       }
@@ -169,6 +177,7 @@ async function collectDirectory(
   root: string,
   relativeDirectory: string,
   policy: ReturnType<typeof effectivePolicy>,
+  warnings: string[],
 ): Promise<void> {
   const absoluteDirectory = path.join(root, relativeDirectory);
 
@@ -181,8 +190,10 @@ async function collectDirectory(
       continue;
     }
 
-    if (entry.isDirectory()) {
-      await collectDirectory(results, root, relativePath, policy);
+    if (entry.isSymbolicLink()) {
+      warnings.push(`snapshot: skipped symlink ${relativePath}`);
+    } else if (entry.isDirectory()) {
+      await collectDirectory(results, root, relativePath, policy, warnings);
     } else if (entry.isFile()) {
       await addFile(results, root, relativePath, policy.policy);
     }
