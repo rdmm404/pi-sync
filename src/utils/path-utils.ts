@@ -49,6 +49,12 @@ export function trimSlashes(value: string): string {
  * Return the Pi agent configuration directory.
  */
 export function agentDir(): string {
+  const configured = process.env.PI_CODING_AGENT_DIR;
+
+  if (configured != null && configured.trim() !== "") {
+    return path.resolve(configured);
+  }
+
   return path.join(os.homedir(), ".pi", "agent");
 }
 
