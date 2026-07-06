@@ -211,12 +211,40 @@ async function symlinkMutationWarning(
 
         return `apply: skipped ${action} through symlink ${symlinkType} ${current}`;
       }
+
+      if (action === "delete" && index === parts.length - 1 && stat.isDirectory()) {
+        const nestedSymlink = await findNestedSymlink(current);
+
+        if (nestedSymlink != null) {
+          return `apply: skipped delete containing symlink ${nestedSymlink}`;
+        }
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
       }
 
       throw error;
+    }
+  }
+
+  return undefined;
+}
+
+async function findNestedSymlink(directory: string): Promise<string | undefined> {
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const child = path.join(directory, entry.name);
+
+    if (entry.isSymbolicLink()) {
+      return child;
+    }
+
+    if (entry.isDirectory()) {
+      const nested = await findNestedSymlink(child);
+
+      if (nested != null) {
+        return nested;
+      }
     }
   }
 

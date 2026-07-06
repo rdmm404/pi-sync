@@ -35,10 +35,12 @@ export function isDeniedPath(relativePath: string): boolean {
   const normalized = toPosix(relativePath);
   const base = path.posix.basename(normalized).toLowerCase();
 
+  const segments = normalized.split("/");
+
   return (
-    normalized.includes("/node_modules/") ||
-    normalized.includes("/.git/") ||
-    normalized.includes("/.pisync/") ||
+    segments.includes("node_modules") ||
+    segments.includes(".git") ||
+    segments.includes(".pisync") ||
     base === ".env" ||
     base.startsWith(".env.") ||
     base.endsWith(".env") ||
