@@ -3,20 +3,16 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import {
-  SECRET_PATTERNS,
-  TOP_LEVEL_DIRS,
-  TOP_LEVEL_FILES,
-  VERSION,
-} from "../domain/constants.js";
-import type { Snapshot, SnapshotFile } from "../domain/types.js";
+import { SECRET_PATTERNS, VERSION } from "../domain/constants.js";
+import type { Snapshot, SnapshotFile, SyncPolicy } from "../domain/types.js";
+import { effectivePolicy, isIncludedByPolicy } from "../policy/policy.js";
 import { agentDir, posixJoin, safeJoin, toPosix } from "../utils/path-utils.js";
 
 /**
  * Create a snapshot from the local Pi agent configuration.
  */
-export async function createSnapshot(): Promise<Snapshot> {
-  const files = await collectFiles(agentDir());
+export async function createSnapshot(policy?: SyncPolicy): Promise<Snapshot> {
+  const files = await collectFiles(agentDir(), policy);
 
   return {
     version: VERSION,
@@ -136,24 +132,42 @@ export function fileHashMap(snapshot: Snapshot): Record<string, string> {
   );
 }
 
-async function collectFiles(root: string): Promise<SnapshotFile[]> {
+async function collectFiles(root: string, policy?: SyncPolicy): Promise<SnapshotFile[]> {
   const results: SnapshotFile[] = [];
+  const effective = effectivePolicy(policy);
 
-  for (const entry of await fs.readdir(root, { withFileTypes: true })) {
-    if (entry.isFile() && TOP_LEVEL_FILES.has(entry.name)) {
-      await addFile(results, root, entry.name);
-    } else if (entry.isDirectory() && TOP_LEVEL_DIRS.has(entry.name)) {
-      await collectDirectory(results, root, entry.name);
+  for (const managedPath of effective.included) {
+    if (isDeniedPath(managedPath.path)) {
+      continue;
+    }
+
+    const absolutePath = safeJoin(root, managedPath.path);
+
+    try {
+      const stat = await fs.lstat(absolutePath);
+
+      if (stat.isDirectory()) {
+        await collectDirectory(results, root, managedPath.path, effective);
+      } else if (stat.isFile()) {
+        await addFile(results, root, managedPath.path);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
     }
   }
 
-  return results.sort((left, right) => left.path.localeCompare(right.path));
+  return [...new Map(results.map((file) => [file.path, file])).values()].sort(
+    (left, right) => left.path.localeCompare(right.path),
+  );
 }
 
 async function collectDirectory(
   results: SnapshotFile[],
   root: string,
   relativeDirectory: string,
+  policy: ReturnType<typeof effectivePolicy>,
 ): Promise<void> {
   const absoluteDirectory = path.join(root, relativeDirectory);
 
@@ -162,12 +176,12 @@ async function collectDirectory(
   })) {
     const relativePath = posixJoin(relativeDirectory, entry.name);
 
-    if (isDeniedPath(relativePath)) {
+    if (isDeniedPath(relativePath) || !isIncludedByPolicy(relativePath, policy)) {
       continue;
     }
 
     if (entry.isDirectory()) {
-      await collectDirectory(results, root, relativePath);
+      await collectDirectory(results, root, relativePath, policy);
     } else if (entry.isFile()) {
       await addFile(results, root, relativePath);
     }

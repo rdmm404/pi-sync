@@ -251,7 +251,7 @@ export class SyncOperations {
     }
 
     const config = await loadConfig();
-    const local = await createSnapshot();
+    const local = await createSnapshot(config.policy);
     const gitStore = new GitStore(config);
 
     await gitStore.prepare();
@@ -282,9 +282,9 @@ export class SyncOperations {
     config: SyncConfig,
     remote: Snapshot,
   ): Promise<void> {
-    const backup = await backupLocal();
+    const backup = await backupLocal(config);
 
-    await applySnapshot(remote);
+    await applySnapshot(remote, config.policy);
     await writeSyncState(remote, await new GitStore(config).currentCommit());
     await refreshSyncFooter(this.ctx);
     this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
@@ -353,9 +353,9 @@ export class SyncOperations {
     config: SyncConfig,
     remote: Snapshot,
   ): Promise<void> {
-    const backup = await backupLocal();
+    const backup = await backupLocal(config);
 
-    await applySnapshot(remote);
+    await applySnapshot(remote, config.policy);
     await refreshSyncFooter(this.ctx);
     this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
     this.ctx.ui.notify(
@@ -404,8 +404,8 @@ function hasDiverged(
   );
 }
 
-async function backupLocal(): Promise<string> {
-  const snapshot = await createSnapshot();
+async function backupLocal(config: SyncConfig): Promise<string> {
+  const snapshot = await createSnapshot(config.policy);
   const backupDirectory = path.join(stateDir(), "backups");
 
   await fs.mkdir(backupDirectory, { recursive: true });

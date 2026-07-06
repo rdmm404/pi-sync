@@ -1,18 +1,19 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { Snapshot } from "../domain/types.js";
+import type { Snapshot, SyncPolicy } from "../domain/types.js";
+import { effectivePolicy, isIncludedByPolicy } from "../policy/policy.js";
 import { agentDir, safeJoin, toPosix } from "../utils/path-utils.js";
-import { createSnapshot, decodeBase64Strict, hashBuffer } from "./snapshot.js";
+import { createSnapshot, decodeBase64Strict, hashBuffer, isDeniedPath } from "./snapshot.js";
 
 /**
  *
  * @param snapshot
  */
-export async function applySnapshot(snapshot: Snapshot): Promise<void> {
+export async function applySnapshot(snapshot: Snapshot, policy?: SyncPolicy): Promise<void> {
   const root = agentDir();
-  const current = await createSnapshot();
-  const plan = preflightSnapshotApply(root, snapshot, current);
+  const current = await createSnapshot(policy);
+  const plan = preflightSnapshotApply(root, snapshot, current, policy);
 
   await preflightSnapshotMutations(root, plan);
 
@@ -36,20 +37,29 @@ export function preflightSnapshotApply(
   root: string,
   snapshot: Snapshot,
   current: Snapshot,
+  policy?: SyncPolicy,
 ): { writes: { target: string; content: Buffer }[]; deletes: string[] } {
   const remotePaths = new Set<string>();
-  const writes = snapshot.files.map((file) => {
+  const effective = effectivePolicy(policy);
+  const writes: { target: string; content: Buffer }[] = [];
+
+  for (const file of snapshot.files) {
     const normalized = validateSnapshotPath(file.path, remotePaths);
+
+    if (isDeniedPath(normalized) || !isIncludedByPolicy(normalized, effective)) {
+      continue;
+    }
+
     const content = decodeBase64Strict(file.contentBase64, normalized);
 
     if (hashBuffer(content) !== file.sha256) {
       throw new Error(`Checksum mismatch in snapshot file: ${normalized}`);
     }
 
-    return { target: safeJoin(root, normalized), content };
-  });
+    writes.push({ target: safeJoin(root, normalized), content });
+  }
 
-  return { writes, deletes: staleLocalPaths(root, current, remotePaths) };
+  return { writes, deletes: staleLocalPaths(root, current, remotePaths, policy) };
 }
 
 async function preflightSnapshotMutations(
@@ -71,10 +81,14 @@ function validateSnapshotPath(
   pathValue: string,
   seenPaths: Set<string>,
 ): string {
-  const normalized = toPosix(pathValue);
+  const raw = toPosix(pathValue);
+  const rawParts = raw.split("/");
+  const normalized = toPosix(path.posix.normalize(raw));
 
   if (
     normalized === "" ||
+    normalized === "." ||
+    rawParts.includes("..") ||
     normalized.startsWith("../") ||
     path.posix.isAbsolute(normalized)
   ) {
@@ -94,18 +108,24 @@ function staleLocalPaths(
   root: string,
   current: Snapshot,
   remotePaths: Set<string>,
+  policy?: SyncPolicy,
 ): string[] {
+  const effective = effectivePolicy(policy);
   const deletePaths = new Set<string>();
 
   for (const file of current.files) {
     const normalized = toPosix(file.path);
+
+    if (!isIncludedByPolicy(normalized, effective)) {
+      continue;
+    }
 
     if (!remotePaths.has(normalized)) {
       deletePaths.add(safeJoin(root, normalized));
     }
 
     for (const remotePath of remotePaths) {
-      if (normalized.startsWith(`${remotePath}/`)) {
+      if (isIncludedByPolicy(remotePath, effective) && normalized.startsWith(`${remotePath}/`)) {
         deletePaths.add(safeJoin(root, remotePath));
       }
     }

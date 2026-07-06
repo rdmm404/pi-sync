@@ -4,12 +4,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import {
-  TOP_LEVEL_DIRS,
-  TOP_LEVEL_FILES,
-  VERSION,
-} from "../domain/constants.js";
+import { VERSION } from "../domain/constants.js";
 import type { Snapshot, SnapshotFile, SyncConfig } from "../domain/types.js";
+import { effectivePolicy, isIncludedByPolicy } from "../policy/policy.js";
 import {
   hashBuffer,
   hashFiles,
@@ -20,6 +17,7 @@ import { firstNonEmpty } from "../utils/json-utils.js";
 import { repoDir, safeJoin, toPosix } from "../utils/path-utils.js";
 
 const execFileAsync = promisify(execFile);
+const SNAPSHOT_MANIFEST = ".pi-sync-manifest.json";
 
 export { execFileAsync };
 
@@ -154,8 +152,12 @@ export class GitStore {
   async writeSnapshot(snapshot: Snapshot): Promise<void> {
     const root = repoDir();
 
-    await this.removeSyncedRepoPaths();
+    await this.removeSyncedRepoPaths(snapshot);
     await materializeSnapshot(snapshot, root);
+    await fs.writeFile(
+      safeJoin(root, SNAPSHOT_MANIFEST),
+      `${JSON.stringify(snapshot.files.map((file) => file.path).sort(), null, "\t")}\n`,
+    );
   }
 
   private async remoteBranchExists(): Promise<boolean> {
@@ -179,17 +181,18 @@ export class GitStore {
         "--name-only",
         commitish,
         "--",
-        ...syncPathspecs(),
+        ...syncPathspecs(this.config),
       ]);
     } catch {
       return [];
     }
 
+    const policy = effectivePolicy(this.config.policy);
     const files = await Promise.all(
       listing
         .split("\n")
         .filter((repoPath) => repoPath !== "")
-        .map((repoPath) => this.readSnapshotFile(commitish, repoPath)),
+        .map((repoPath) => this.readSnapshotFile(commitish, repoPath, policy)),
     );
 
     return files.flatMap((file) => (file == null ? [] : [file]));
@@ -198,10 +201,15 @@ export class GitStore {
   private async readSnapshotFile(
     commitish: string,
     repoPath: string,
+    policy: ReturnType<typeof effectivePolicy>,
   ): Promise<SnapshotFile | undefined> {
     const relativePath = toPosix(repoPath);
 
-    if (relativePath === "" || isDeniedPath(relativePath)) {
+    if (
+      relativePath === "" ||
+      isDeniedPath(relativePath) ||
+      !isIncludedByPolicy(relativePath, policy)
+    ) {
       return undefined;
     }
 
@@ -242,14 +250,38 @@ export class GitStore {
     }
   }
 
-  private async removeSyncedRepoPaths(): Promise<void> {
+  private async removeSyncedRepoPaths(snapshot: Snapshot): Promise<void> {
     const root = repoDir();
+    const paths = new Set<string>([
+      ...syncPathspecs(this.config),
+      ...snapshot.files.map((file) => file.path),
+      ...(await this.readManifestPaths()),
+      SNAPSHOT_MANIFEST,
+    ]);
 
-    for (const relativePath of syncPathspecs()) {
+    for (const relativePath of paths) {
       await fs.rm(safeJoin(root, relativePath), {
         force: true,
         recursive: true,
       });
+    }
+  }
+
+  private async readManifestPaths(): Promise<string[]> {
+    try {
+      const content = await fs.readFile(
+        safeJoin(repoDir(), SNAPSHOT_MANIFEST),
+        "utf8",
+      );
+      const parsed = JSON.parse(content) as unknown;
+
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed.filter((item): item is string => typeof item === "string");
+    } catch {
+      return [];
     }
   }
 }
@@ -257,6 +289,6 @@ export class GitStore {
 /**
  * Return root-level Git pathspecs managed by pi-sync.
  */
-export function syncPathspecs(): string[] {
-  return [...TOP_LEVEL_FILES, ...TOP_LEVEL_DIRS];
+export function syncPathspecs(config?: SyncConfig): string[] {
+  return effectivePolicy(config?.policy).included.map((entry) => entry.path);
 }

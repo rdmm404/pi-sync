@@ -277,7 +277,7 @@ async function history(ctx: ExtensionCommandContext): Promise<void> {
     "--decorate",
     "--max-count=20",
     "--",
-    ...syncPathspecs(),
+    ...syncPathspecs(config),
   ]);
   const historyText = output.trim();
 
