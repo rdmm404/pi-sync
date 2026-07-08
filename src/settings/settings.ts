@@ -5,6 +5,7 @@ import { effectivePolicy, isIncludedByPolicy } from "../policy/policy.js";
 import { agentDir, toPosix } from "../utils/path-utils.js";
 
 const RESOURCE_ARRAY_KEYS = ["packages", "extensions", "skills", "prompts", "themes"];
+const ALWAYS_STRIPPED_SETTINGS_KEYS = new Set(["lastChangelogVersion"]);
 
 type JsonObject = Record<string, unknown>;
 
@@ -16,8 +17,9 @@ export function sanitizeSettings(settings: unknown, policy?: SyncPolicy): JsonOb
     throw new Error("settings.json must contain a JSON object");
   }
 
+  const strippedSettingsKeys = settingsKeysToStrip(policy);
   const sanitized = Object.fromEntries(
-    Object.entries(settings).filter(([key]) => key !== "lastChangelogVersion"),
+    Object.entries(settings).filter(([key]) => !strippedSettingsKeys.has(key)),
   );
 
   for (const key of RESOURCE_ARRAY_KEYS) {
@@ -58,8 +60,10 @@ export function mergeSettings(
     merged[key] = mergeUniqueEntries(incomingValue, localOnly);
   }
 
-  if ("lastChangelogVersion" in local) {
-    merged.lastChangelogVersion = local.lastChangelogVersion;
+  for (const key of settingsKeysToStrip(policy)) {
+    if (key in local) {
+      merged[key] = local[key];
+    }
   }
 
   return merged;
@@ -91,6 +95,17 @@ export function settingsEntrySource(entry: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+function settingsKeysToStrip(policy?: SyncPolicy): Set<string> {
+  const stripped = new Set(ALWAYS_STRIPPED_SETTINGS_KEYS);
+  const normalizedPolicy = effectivePolicy(policy).policy;
+
+  for (const key of normalizedPolicy.stripSettingsKeys) {
+    stripped.add(key);
+  }
+
+  return stripped;
 }
 
 function isPortableSource(source: string, policy?: SyncPolicy): boolean {

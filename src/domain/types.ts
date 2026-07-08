@@ -2,12 +2,14 @@ export type SyncPolicy = {
   includeDefaults?: boolean;
   includePaths?: string[];
   excludePaths?: string[];
+  stripSettingsKeys?: string[];
 };
 
 export type NormalizedSyncPolicy = {
   includeDefaults: boolean;
   includePaths: string[];
   excludePaths: string[];
+  stripSettingsKeys: string[];
 };
 
 export type SyncConfig = {

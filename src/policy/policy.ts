@@ -26,6 +26,7 @@ export function normalizePolicy(policy: unknown): NormalizedSyncPolicy {
       includeDefaults: true,
       includePaths: [],
       excludePaths: [],
+      stripSettingsKeys: [],
     };
   }
 
@@ -43,6 +44,10 @@ export function normalizePolicy(policy: unknown): NormalizedSyncPolicy {
     includeDefaults: includeDefaults ?? true,
     includePaths: normalizePolicyPathList(policy.includePaths ?? [], "includePaths"),
     excludePaths: normalizePolicyPathList(policy.excludePaths ?? [], "excludePaths"),
+    stripSettingsKeys: normalizeSettingsKeyList(
+      policy.stripSettingsKeys ?? [],
+      "stripSettingsKeys",
+    ),
   };
 }
 
@@ -121,6 +126,30 @@ function normalizePolicyPathList(paths: unknown, field: string): string[] {
     }
 
     normalized.add(normalizeRelativePath(value, field));
+  }
+
+  return [...normalized].sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeSettingsKeyList(keys: unknown, field: string): string[] {
+  if (!Array.isArray(keys)) {
+    throw new Error(`Invalid policy ${field}: expected an array of setting keys`);
+  }
+
+  const normalized = new Set<string>();
+
+  for (const value of keys) {
+    if (typeof value !== "string") {
+      throw new Error(`Invalid policy ${field}: expected string setting keys`);
+    }
+
+    const trimmed = value.trim();
+
+    if (trimmed === "") {
+      throw new Error(`Invalid policy ${field}: empty setting key`);
+    }
+
+    normalized.add(trimmed);
   }
 
   return [...normalized].sort((left, right) => left.localeCompare(right));

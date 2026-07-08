@@ -118,7 +118,8 @@ Example:
   "policy": {
     "includeDefaults": true,
     "includePaths": [],
-    "excludePaths": ["extensions/work-only"]
+    "excludePaths": ["extensions/work-only"],
+    "stripSettingsKeys": ["defaultModel", "defaultThinkingLevel"]
   }
 }
 ```
@@ -128,6 +129,7 @@ Policy fields are optional:
 - `includeDefaults`: defaults to `true`; includes the standard pi-sync files and dirs.
 - `includePaths`: extra relative paths under the Pi dir to sync.
 - `excludePaths`: relative paths under the Pi dir to skip; excludes win over includes.
+- `stripSettingsKeys`: extra top-level `settings.json` keys to keep machine-local.
 
 Use blacklist mode by keeping `includeDefaults: true` and adding excludes. Use whitelist mode by setting `includeDefaults: false` and listing only the paths you want in `includePaths`.
 
@@ -215,7 +217,8 @@ It excludes `.env*`, `node_modules`, `.git`, `.pisync`, `pi-sync.json`, and path
 
 `settings.json` is sanitized before sync and merged on pull:
 
-- `lastChangelogVersion` is stripped from synced settings.
+- `lastChangelogVersion` is always stripped from synced settings.
+- `policy.stripSettingsKeys` entries are also stripped from synced settings and preserved locally on pull. This is useful for machine-local preferences such as `defaultModel` and `defaultThinkingLevel`.
 - Portable package sources are synced, including npm package names, `npm:`, `git:`, HTTPS Git URLs, and SSH Git URLs.
 - Relative local paths are synced only when they stay inside the Pi dir and point at policy-included paths.
 - Absolute paths, `~` paths, `file:` paths, and paths escaping the Pi dir are treated as machine-local and preserved locally during pulls.
