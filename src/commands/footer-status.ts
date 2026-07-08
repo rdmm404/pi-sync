@@ -41,10 +41,7 @@ export function setSyncFooter(
   remote: Snapshot | undefined,
   state: SyncState,
 ): void {
-  ctx.ui.setStatus(
-    STATUS_KEY,
-    formatStyledSyncFooter(ctx, local, remote, state),
-  );
+  ctx.ui.setStatus(STATUS_KEY, formatStyledSyncFooter(ctx, local, remote, state));
 }
 
 /**
@@ -66,7 +63,7 @@ export function formatSyncFooter(
 
 function formatCompactSyncStatus(drift: SyncDrift): string {
   if (drift.local === 0 && drift.remote === 0) {
-    return "✓";
+    return "";
   }
 
   const parts: string[] = [];
@@ -86,11 +83,11 @@ function formatStyledSyncFooter(
   local: Snapshot,
   remote: Snapshot | undefined,
   state: SyncState,
-): string {
+): string | undefined {
   const drift = syncDrift(local, remote, state);
 
   if (drift.local === 0 && drift.remote === 0) {
-    return ctx.ui.theme.fg("success", "✓");
+    return undefined;
   }
 
   const parts: string[] = [];
