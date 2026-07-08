@@ -60,7 +60,6 @@ export class GitStore {
         this.config.branch,
         `origin/${this.config.branch}`,
       ]);
-      await this.run(["pull", "--ff-only", "origin", this.config.branch]);
 
       return;
     }
