@@ -61,7 +61,24 @@ export function formatSyncFooter(
 ): string {
   const drift = syncDrift(local, remote, state);
 
-  return `PI-SYNC: ↑${drift.local} ↓${drift.remote}`;
+  return formatCompactSyncStatus(drift);
+}
+
+function formatCompactSyncStatus(drift: SyncDrift): string {
+  if (drift.local === 0 && drift.remote === 0) {
+    return "✓";
+  }
+
+  const parts: string[] = [];
+
+  if (drift.local > 0) {
+    parts.push(`↑${drift.local}`);
+  }
+  if (drift.remote > 0) {
+    parts.push(`↓${drift.remote}`);
+  }
+
+  return parts.join(" ");
 }
 
 function formatStyledSyncFooter(
@@ -71,11 +88,21 @@ function formatStyledSyncFooter(
   state: SyncState,
 ): string {
   const drift = syncDrift(local, remote, state);
-  const label = ctx.ui.theme.fg("muted", "PI-SYNC:");
-  const output = ctx.ui.theme.fg("error", `↑${drift.local}`);
-  const input = ctx.ui.theme.fg("success", `↓${drift.remote}`);
 
-  return `${label} ${output} ${input}`;
+  if (drift.local === 0 && drift.remote === 0) {
+    return ctx.ui.theme.fg("success", "✓");
+  }
+
+  const parts: string[] = [];
+
+  if (drift.local > 0) {
+    parts.push(ctx.ui.theme.fg("error", `↑${drift.local}`));
+  }
+  if (drift.remote > 0) {
+    parts.push(ctx.ui.theme.fg("success", `↓${drift.remote}`));
+  }
+
+  return parts.join(" ");
 }
 
 /**
