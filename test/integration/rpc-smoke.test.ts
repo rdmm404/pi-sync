@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import {
+  type ChildProcessWithoutNullStreams,
+  execFileSync,
+  spawn,
+} from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -61,7 +72,7 @@ class RpcClient {
     await this.request({ type: "prompt", message });
   }
 
-  async close(): Promise<void> {
+  close(): void {
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(new Error("RPC client closing"));
@@ -134,7 +145,7 @@ class RpcClient {
     }
 
     if (event.type === "extension_error") {
-      const error = new Error(String(event.error ?? "extension error"));
+      const error = new Error(formatUnknown(event.error ?? "extension error"));
 
       for (const pending of this.pending.values()) {
         clearTimeout(pending.timer);
@@ -161,9 +172,15 @@ class RpcClient {
     if (event.success === true) {
       pending.resolve();
     } else {
-      pending.reject(new Error(String(event.error ?? "RPC request failed")));
+      pending.reject(
+        new Error(formatUnknown(event.error ?? "RPC request failed")),
+      );
     }
   }
+}
+
+function formatUnknown(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
 }
 
 function commandExists(command: string): boolean {
@@ -197,19 +214,32 @@ async function assertFile(filePath: string): Promise<void> {
 }
 
 async function assertNoPath(filePath: string): Promise<void> {
-  assert.equal(await pathExists(filePath), false, `unexpected path exists: ${filePath}`);
+  assert.equal(
+    await pathExists(filePath),
+    false,
+    `unexpected path exists: ${filePath}`,
+  );
 }
 
 async function assertContains(filePath: string, text: string): Promise<void> {
-  assert.match(await readFile(filePath, "utf8"), new RegExp(escapeRegExp(text)));
+  assert.match(
+    await readFile(filePath, "utf8"),
+    new RegExp(escapeRegExp(text)),
+  );
 }
 
-async function assertNotContains(filePath: string, text: string): Promise<void> {
+async function assertNotContains(
+  filePath: string,
+  text: string,
+): Promise<void> {
   if (!(await pathExists(filePath))) {
     return;
   }
 
-  assert.doesNotMatch(await readFile(filePath, "utf8"), new RegExp(escapeRegExp(text)));
+  assert.doesNotMatch(
+    await readFile(filePath, "utf8"),
+    new RegExp(escapeRegExp(text)),
+  );
 }
 
 function escapeRegExp(text: string): string {
@@ -220,7 +250,11 @@ async function writeJson(filePath: string, value: unknown): Promise<void> {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function writeConfig(directory: string, remote: string, excludePaths: string[]): Promise<void> {
+async function writeConfig(
+  directory: string,
+  remote: string,
+  excludePaths: string[],
+): Promise<void> {
   await writeJson(path.join(directory, "pi-sync.json"), {
     repository: remote,
     branch: "main",
@@ -252,108 +286,183 @@ async function createFixture(): Promise<Fixture> {
 
 const hasPi = commandExists("pi");
 
-test("pi-sync RPC smoke flow", { skip: hasPi ? false : "pi CLI not found" }, async (t) => {
-  const fixture = await createFixture();
-  const laptop = new RpcClient(fixture.laptopPiDir);
-  const desktop = new RpcClient(fixture.desktopPiDir);
+void test(
+  "pi-sync RPC smoke flow",
+  { skip: hasPi ? false : "pi CLI not found" },
+  async (t) => {
+    const fixture = await createFixture();
+    const laptop = new RpcClient(fixture.laptopPiDir);
+    const desktop = new RpcClient(fixture.desktopPiDir);
 
-  t.after(async () => {
-    await laptop.close();
-    await desktop.close();
-    await rm(fixture.root, { recursive: true, force: true });
-  });
-
-  await t.test("laptop push sanitizes settings and respects policy excludes", async () => {
-    await mkdir(path.join(fixture.laptopPiDir, "extensions"));
-    await mkdir(path.join(fixture.laptopPiDir, "prompts"));
-    await writeJson(path.join(fixture.laptopPiDir, "settings.json"), {
-      lastChangelogVersion: "999.0.0",
-      theme: "personal",
-      packages: ["npm:is-odd", "/Users/example/local-only-package"],
-    });
-    await writeFile(path.join(fixture.laptopPiDir, "extensions/dummy.ts"), "export default () => {};\n");
-    await writeFile(path.join(fixture.laptopPiDir, "extensions/work-only.ts"), "export default () => {};\n");
-    await writeFile(path.join(fixture.laptopPiDir, "prompts/hello.md"), "hello prompt\n");
-
-    await laptop.prompt("/pisync push --yes");
-    git(["clone", fixture.remote, fixture.remoteWorktree]);
-
-    await assertFile(path.join(fixture.remoteWorktree, "settings.json"));
-    await assertFile(path.join(fixture.remoteWorktree, "extensions/dummy.ts"));
-    await assertFile(path.join(fixture.remoteWorktree, "prompts/hello.md"));
-    await assertNoPath(path.join(fixture.remoteWorktree, "extensions/work-only.ts"));
-    await assertNotContains(path.join(fixture.remoteWorktree, "settings.json"), "lastChangelogVersion");
-    await assertContains(path.join(fixture.remoteWorktree, "settings.json"), "npm:is-odd");
-    await assertNotContains(path.join(fixture.remoteWorktree, "settings.json"), "/Users/example/local-only-package");
-  });
-
-  await t.test("desktop pull merges settings and preserves excluded local paths", async () => {
-    await mkdir(path.join(fixture.desktopPiDir, "extensions"), { recursive: true });
-    await writeFile(path.join(fixture.desktopPiDir, "extensions/work-only.ts"), "export default () => {};\n");
-    await writeJson(path.join(fixture.desktopPiDir, "settings.json"), {
-      lastChangelogVersion: "local-version",
-      packages: ["/tmp/local-b-package"],
+    t.after(async () => {
+      laptop.close();
+      desktop.close();
+      await rm(fixture.root, { recursive: true, force: true });
     });
 
-    await desktop.prompt("/pisync pull --yes --force");
+    await t.test(
+      "laptop push sanitizes settings and respects policy excludes",
+      async () => {
+        await mkdir(path.join(fixture.laptopPiDir, "extensions"));
+        await mkdir(path.join(fixture.laptopPiDir, "prompts"));
+        await writeJson(path.join(fixture.laptopPiDir, "settings.json"), {
+          lastChangelogVersion: "999.0.0",
+          theme: "personal",
+          packages: ["npm:is-odd", "/Users/example/local-only-package"],
+        });
+        await writeFile(
+          path.join(fixture.laptopPiDir, "extensions/dummy.ts"),
+          "export default () => {};\n",
+        );
+        await writeFile(
+          path.join(fixture.laptopPiDir, "extensions/work-only.ts"),
+          "export default () => {};\n",
+        );
+        await writeFile(
+          path.join(fixture.laptopPiDir, "prompts/hello.md"),
+          "hello prompt\n",
+        );
 
-    await assertFile(path.join(fixture.desktopPiDir, "extensions/dummy.ts"));
-    await assertFile(path.join(fixture.desktopPiDir, "prompts/hello.md"));
-    await assertFile(path.join(fixture.desktopPiDir, "extensions/work-only.ts"));
-    await assertContains(path.join(fixture.desktopPiDir, "settings.json"), "local-version");
-    await assertContains(path.join(fixture.desktopPiDir, "settings.json"), "/tmp/local-b-package");
-    await assertContains(path.join(fixture.desktopPiDir, "settings.json"), "npm:is-odd");
-  });
+        await laptop.prompt("/pisync push --yes");
+        git(["clone", fixture.remote, fixture.remoteWorktree]);
 
-  await t.test("remote repository changes can be pulled by laptop", async () => {
-    await writeFile(path.join(fixture.remoteWorktree, "prompts/remote.md"), "remote changed prompt\n");
-    git(["add", "prompts/remote.md"], fixture.remoteWorktree);
-    git([
-      "-c",
-      "user.name=Smoke Test",
-      "-c",
-      "user.email=smoke@example.invalid",
-      "commit",
-      "-m",
-      "remote prompt change",
-    ], fixture.remoteWorktree);
-    git(["push", "origin", "main"], fixture.remoteWorktree);
-
-    await laptop.prompt("/pisync pull --yes --force");
-    await assertFile(path.join(fixture.laptopPiDir, "prompts/remote.md"));
-  });
-
-  await t.test("laptop symlinks are skipped on push", async () => {
-    await symlink("/tmp", path.join(fixture.laptopPiDir, "extensions/symlinked"));
-    await laptop.prompt("/pisync push --yes --force");
-    git(["pull", "--ff-only"], fixture.remoteWorktree);
-
-    await assertNoPath(path.join(fixture.remoteWorktree, "extensions/symlinked"));
-  });
-
-  await t.test("hard denied paths win over explicit includes", async () => {
-    await writeJson(path.join(fixture.laptopPiDir, "pi-sync.json"), {
-      repository: fixture.remote,
-      branch: "main",
-      autoSync: false,
-      policy: {
-        includeDefaults: false,
-        includePaths: [".pisync", "pi-sync.json", ".env", "node_modules", "settings.json"],
-        excludePaths: [],
+        await assertFile(path.join(fixture.remoteWorktree, "settings.json"));
+        await assertFile(
+          path.join(fixture.remoteWorktree, "extensions/dummy.ts"),
+        );
+        await assertFile(path.join(fixture.remoteWorktree, "prompts/hello.md"));
+        await assertNoPath(
+          path.join(fixture.remoteWorktree, "extensions/work-only.ts"),
+        );
+        await assertNotContains(
+          path.join(fixture.remoteWorktree, "settings.json"),
+          "lastChangelogVersion",
+        );
+        await assertContains(
+          path.join(fixture.remoteWorktree, "settings.json"),
+          "npm:is-odd",
+        );
+        await assertNotContains(
+          path.join(fixture.remoteWorktree, "settings.json"),
+          "/Users/example/local-only-package",
+        );
       },
+    );
+
+    await t.test(
+      "desktop pull merges settings and preserves excluded local paths",
+      async () => {
+        await mkdir(path.join(fixture.desktopPiDir, "extensions"), {
+          recursive: true,
+        });
+        await writeFile(
+          path.join(fixture.desktopPiDir, "extensions/work-only.ts"),
+          "export default () => {};\n",
+        );
+        await writeJson(path.join(fixture.desktopPiDir, "settings.json"), {
+          lastChangelogVersion: "local-version",
+          packages: ["/tmp/local-b-package"],
+        });
+
+        await desktop.prompt("/pisync pull --yes --force");
+
+        await assertFile(
+          path.join(fixture.desktopPiDir, "extensions/dummy.ts"),
+        );
+        await assertFile(path.join(fixture.desktopPiDir, "prompts/hello.md"));
+        await assertFile(
+          path.join(fixture.desktopPiDir, "extensions/work-only.ts"),
+        );
+        await assertContains(
+          path.join(fixture.desktopPiDir, "settings.json"),
+          "local-version",
+        );
+        await assertContains(
+          path.join(fixture.desktopPiDir, "settings.json"),
+          "/tmp/local-b-package",
+        );
+        await assertContains(
+          path.join(fixture.desktopPiDir, "settings.json"),
+          "npm:is-odd",
+        );
+      },
+    );
+
+    await t.test(
+      "remote repository changes can be pulled by laptop",
+      async () => {
+        await writeFile(
+          path.join(fixture.remoteWorktree, "prompts/remote.md"),
+          "remote changed prompt\n",
+        );
+        git(["add", "prompts/remote.md"], fixture.remoteWorktree);
+        git(
+          [
+            "-c",
+            "user.name=Smoke Test",
+            "-c",
+            "user.email=smoke@example.invalid",
+            "commit",
+            "-m",
+            "remote prompt change",
+          ],
+          fixture.remoteWorktree,
+        );
+        git(["push", "origin", "main"], fixture.remoteWorktree);
+
+        await laptop.prompt("/pisync pull --yes --force");
+        await assertFile(path.join(fixture.laptopPiDir, "prompts/remote.md"));
+      },
+    );
+
+    await t.test("laptop symlinks are skipped on push", async () => {
+      await symlink(
+        "/tmp",
+        path.join(fixture.laptopPiDir, "extensions/symlinked"),
+      );
+      await laptop.prompt("/pisync push --yes --force");
+      git(["pull", "--ff-only"], fixture.remoteWorktree);
+
+      await assertNoPath(
+        path.join(fixture.remoteWorktree, "extensions/symlinked"),
+      );
     });
-    await mkdir(path.join(fixture.laptopPiDir, "node_modules/pkg"), { recursive: true });
-    await writeFile(path.join(fixture.laptopPiDir, ".env"), "SECRET=bad\n");
-    await writeFile(path.join(fixture.laptopPiDir, "node_modules/pkg/index.js"), "module\n");
 
-    await laptop.prompt("/pisync push --yes --force");
-    await rm(fixture.remoteWorktree, { recursive: true, force: true });
-    git(["clone", fixture.remote, fixture.remoteWorktree]);
+    await t.test("hard denied paths win over explicit includes", async () => {
+      await writeJson(path.join(fixture.laptopPiDir, "pi-sync.json"), {
+        repository: fixture.remote,
+        branch: "main",
+        autoSync: false,
+        policy: {
+          includeDefaults: false,
+          includePaths: [
+            ".pisync",
+            "pi-sync.json",
+            ".env",
+            "node_modules",
+            "settings.json",
+          ],
+          excludePaths: [],
+        },
+      });
+      await mkdir(path.join(fixture.laptopPiDir, "node_modules/pkg"), {
+        recursive: true,
+      });
+      await writeFile(path.join(fixture.laptopPiDir, ".env"), "SECRET=bad\n");
+      await writeFile(
+        path.join(fixture.laptopPiDir, "node_modules/pkg/index.js"),
+        "module\n",
+      );
 
-    await assertFile(path.join(fixture.remoteWorktree, "settings.json"));
-    await assertNoPath(path.join(fixture.remoteWorktree, ".env"));
-    await assertNoPath(path.join(fixture.remoteWorktree, "node_modules"));
-    await assertNoPath(path.join(fixture.remoteWorktree, "pi-sync.json"));
-    await assertNoPath(path.join(fixture.remoteWorktree, ".pisync"));
-  });
-});
+      await laptop.prompt("/pisync push --yes --force");
+      await rm(fixture.remoteWorktree, { recursive: true, force: true });
+      git(["clone", fixture.remote, fixture.remoteWorktree]);
+
+      await assertFile(path.join(fixture.remoteWorktree, "settings.json"));
+      await assertNoPath(path.join(fixture.remoteWorktree, ".env"));
+      await assertNoPath(path.join(fixture.remoteWorktree, "node_modules"));
+      await assertNoPath(path.join(fixture.remoteWorktree, "pi-sync.json"));
+      await assertNoPath(path.join(fixture.remoteWorktree, ".pisync"));
+    });
+  },
+);
