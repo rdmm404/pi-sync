@@ -89,6 +89,10 @@ async function runCommand(
       await status(ctx, options);
 
       return;
+    case "changes":
+      await changes(ctx);
+
+      return;
     case "diff":
       await diff(ctx);
 
@@ -228,6 +232,30 @@ function formatPathList(paths: string[]): string[] {
   }
 
   return paths.map((item) => `- ${item}`);
+}
+
+async function changes(ctx: ExtensionCommandContext): Promise<void> {
+  ctx.ui.setStatus(ACTIVITY_STATUS_KEY, "🔄 checking");
+  const { local, remote, state } = await syncInputs();
+
+  setSyncFooter(ctx, local, remote, state);
+  const stateHashes = comparableStateHashes(local, remote, state);
+  const localPaths = changedPaths(fileHashMap(local), stateHashes);
+  const remotePaths = changedPaths(
+    remote != null ? fileHashMap(remote) : {},
+    stateHashes,
+  );
+  const totalChanged = localPaths.length + remotePaths.length;
+  const messages = [
+    `changed paths: ${totalChanged}`,
+    `local changed paths (${localPaths.length}):`,
+    ...formatPathList(localPaths),
+    `remote changed paths (${remotePaths.length}):`,
+    ...formatPathList(remotePaths),
+  ];
+
+  ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
+  ctx.ui.notify(messages.join("\n"), totalChanged > 0 ? "warning" : "info");
 }
 
 async function diff(ctx: ExtensionCommandContext): Promise<void> {

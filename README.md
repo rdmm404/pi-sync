@@ -143,6 +143,7 @@ Environment overrides are also supported: `PI_SYNC_REPOSITORY` (or `PI_SYNC_REPO
 /pisync config
 /pisync doctor
 /pisync status [--verbose]
+/pisync changes
 /pisync diff
 /pisync push
 /pisync pull
@@ -159,6 +160,7 @@ Command guide:
 | `/pisync init`                  | Configure pi-sync for this machine.                                   |
 | `/pisync doctor`                | Verify config, Git access, secret scan, and lock status.              |
 | `/pisync status [--verbose]`    | Check local/remote drift and optionally list changed paths.           |
+| `/pisync changes`               | List changed local and remote paths without showing diffs.            |
 | `/pisync diff`                  | Review textual differences before pushing or pulling.                 |
 | `/pisync push`                  | Publish local Pi settings to the Git repo.                            |
 | `/pisync pull`                  | Apply remote Git settings locally after backup and confirmation.      |

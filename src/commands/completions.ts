@@ -33,6 +33,12 @@ const SUBCOMMAND_COMPLETIONS: SubcommandCompletion[] = [
     keywords: ["state", "changes"],
   },
   {
+    value: "changes",
+    label: "changes",
+    description: "List changed local and remote paths without showing diffs.",
+    keywords: ["changed", "files", "paths", "status"],
+  },
+  {
     value: "diff",
     label: "diff",
     description:
