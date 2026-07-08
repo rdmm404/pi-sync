@@ -246,13 +246,20 @@ async function changes(ctx: ExtensionCommandContext): Promise<void> {
     stateHashes,
   );
   const totalChanged = localPaths.length + remotePaths.length;
-  const messages = [
-    `changed paths: ${totalChanged}`,
-    `local changed paths (${localPaths.length}):`,
-    ...formatPathList(localPaths),
-    `remote changed paths (${remotePaths.length}):`,
-    ...formatPathList(remotePaths),
-  ];
+  const messages = [`changed paths: ${totalChanged}`];
+
+  if (localPaths.length > 0) {
+    messages.push(`local changed paths (${localPaths.length}):`, ...formatPathList(localPaths));
+  }
+  if (remotePaths.length > 0) {
+    messages.push(
+      `remote changed paths (${remotePaths.length}):`,
+      ...formatPathList(remotePaths),
+    );
+  }
+  if (totalChanged === 0) {
+    messages.push("no changed paths");
+  }
 
   ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
   ctx.ui.notify(messages.join("\n"), totalChanged > 0 ? "warning" : "info");
