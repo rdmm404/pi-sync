@@ -165,7 +165,7 @@ async function status(
   ctx: ExtensionCommandContext,
   options: CommandOptions,
 ): Promise<void> {
-  ctx.ui.setStatus(STATUS_KEY, "🔄 checking");
+  ctx.ui.setStatus(STATUS_KEY, "checking");
   const { config, local, remote, state } = await syncInputs();
 
   setSyncFooter(ctx, local, remote, state);
@@ -238,7 +238,7 @@ function formatPathList(paths: string[]): string[] {
 }
 
 async function changes(ctx: ExtensionCommandContext): Promise<void> {
-  ctx.ui.setStatus(STATUS_KEY, "🔄 checking");
+  ctx.ui.setStatus(STATUS_KEY, "checking");
   const { local, remote, state } = await syncInputs();
 
   setSyncFooter(ctx, local, remote, state);
@@ -268,7 +268,7 @@ async function changes(ctx: ExtensionCommandContext): Promise<void> {
 }
 
 async function diff(ctx: ExtensionCommandContext): Promise<void> {
-  ctx.ui.setStatus(STATUS_KEY, "🔄 diff");
+  ctx.ui.setStatus(STATUS_KEY, "diffing");
   const { local, remote, state } = await syncInputs();
 
   setSyncFooter(ctx, local, remote, state);

@@ -58,7 +58,7 @@ export class SyncOperations {
    * Push local Pi config into the Git repository.
    */
   async push(): Promise<void> {
-    this.ctx.ui.setStatus(STATUS_KEY, "🔄 pushing");
+    this.ctx.ui.setStatus(STATUS_KEY, "pushing");
     const { config, local, remote, state } = await syncInputs();
 
     setSyncFooter(this.ctx, local, remote, state);
@@ -103,7 +103,7 @@ export class SyncOperations {
    * Pull remote Git config into the local Pi config directory.
    */
   async pull(): Promise<void> {
-    this.ctx.ui.setStatus(STATUS_KEY, "🔄 pulling");
+    this.ctx.ui.setStatus(STATUS_KEY, "pulling");
     const { config, local, remote, state } = await syncInputs();
 
     setSyncFooter(this.ctx, local, remote, state);
