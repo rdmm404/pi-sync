@@ -13,11 +13,7 @@ import {
   loadConfig,
   loadPartialConfig,
 } from "./config/config.js";
-import {
-  ACTIVITY_STATUS_KEY,
-  AUTO_SYNC_OPTIONS,
-  STATUS_KEY,
-} from "./domain/constants.js";
+import { AUTO_SYNC_OPTIONS, STATUS_KEY } from "./domain/constants.js";
 import { ensureStateDir, withLock } from "./state/lock.js";
 import { errorMessage } from "./utils/json-utils.js";
 
@@ -43,13 +39,11 @@ export default function sync(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", (_event, ctx) => {
-    ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
     ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg("muted", "checking"));
     startAutoSyncInBackground(ctx, warningState);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
-    ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
     ctx.ui.setStatus(STATUS_KEY, undefined);
   });
 }
@@ -94,7 +88,6 @@ async function autoSync(
       return;
     }
 
-    ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
     ctx.ui.setStatus(STATUS_KEY, undefined);
     ctx.ui.notify(
       `pi-sync auto sync skipped: ${errorMessage(error)}`,

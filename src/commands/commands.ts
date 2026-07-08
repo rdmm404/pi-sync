@@ -5,9 +5,9 @@ import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 import { loadConfig, loadPartialConfig } from "../config/config.js";
 import {
-  ACTIVITY_STATUS_KEY,
   DEFAULT_BRANCH,
   NO_DIFF_MESSAGE,
+  STATUS_KEY,
 } from "../domain/constants.js";
 import type {
   CommandOptions,
@@ -41,7 +41,7 @@ import { agentDir, localConfigPath, lockPath, repoDir, stateDir } from "../utils
 import { isEnabled, parseOptions, splitArgs, usage } from "./args.js";
 import { repositoryAccessReport } from "./auth.js";
 import { syncInputs } from "./context.js";
-import { setSyncFooter, syncDrift } from "./footer-status.js";
+import { refreshSyncFooter, setSyncFooter, syncDrift } from "./footer-status.js";
 import { initConfig } from "./init.js";
 import { SyncOperations } from "./operations.js";
 
@@ -62,7 +62,11 @@ export async function handleCommand(
     await ensureStateDir();
     await runCommand(subcommand, options, ctx);
   } catch (error) {
-    ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
+    try {
+      await refreshSyncFooter(ctx);
+    } catch {
+      ctx.ui.setStatus(STATUS_KEY, undefined);
+    }
     ctx.ui.notify(errorMessage(error), "error");
   }
 }
@@ -161,7 +165,7 @@ async function status(
   ctx: ExtensionCommandContext,
   options: CommandOptions,
 ): Promise<void> {
-  ctx.ui.setStatus(ACTIVITY_STATUS_KEY, "🔄 checking");
+  ctx.ui.setStatus(STATUS_KEY, "🔄 checking");
   const { config, local, remote, state } = await syncInputs();
 
   setSyncFooter(ctx, local, remote, state);
@@ -183,7 +187,6 @@ async function status(
     messages.push(...verboseStatusLines(local, remote, state));
   }
 
-  ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
   ctx.ui.notify(
     messages.join("\n"),
     localChanged || remoteChanged ? "warning" : "info",
@@ -235,7 +238,7 @@ function formatPathList(paths: string[]): string[] {
 }
 
 async function changes(ctx: ExtensionCommandContext): Promise<void> {
-  ctx.ui.setStatus(ACTIVITY_STATUS_KEY, "🔄 checking");
+  ctx.ui.setStatus(STATUS_KEY, "🔄 checking");
   const { local, remote, state } = await syncInputs();
 
   setSyncFooter(ctx, local, remote, state);
@@ -261,18 +264,16 @@ async function changes(ctx: ExtensionCommandContext): Promise<void> {
     messages.push("no changed paths");
   }
 
-  ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
   ctx.ui.notify(messages.join("\n"), totalChanged > 0 ? "warning" : "info");
 }
 
 async function diff(ctx: ExtensionCommandContext): Promise<void> {
-  ctx.ui.setStatus(ACTIVITY_STATUS_KEY, "🔄 diff");
+  ctx.ui.setStatus(STATUS_KEY, "🔄 diff");
   const { local, remote, state } = await syncInputs();
 
   setSyncFooter(ctx, local, remote, state);
   const output = await formatGitTextDiff(local, remote);
 
-  ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
   ctx.ui.notify(output, output === NO_DIFF_MESSAGE ? "info" : "warning");
 }
 

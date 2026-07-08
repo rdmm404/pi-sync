@@ -7,7 +7,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import { loadConfig } from "../config/config.js";
-import { ACTIVITY_STATUS_KEY } from "../domain/constants.js";
+import { STATUS_KEY } from "../domain/constants.js";
 import type { CommandOptions, Snapshot, SyncConfig } from "../domain/types.js";
 import { GitStore } from "../git/store.js";
 import { applySnapshot } from "../snapshot/apply.js";
@@ -58,7 +58,7 @@ export class SyncOperations {
    * Push local Pi config into the Git repository.
    */
   async push(): Promise<void> {
-    this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, "🔄 pushing");
+    this.ctx.ui.setStatus(STATUS_KEY, "🔄 pushing");
     const { config, local, remote, state } = await syncInputs();
 
     setSyncFooter(this.ctx, local, remote, state);
@@ -91,8 +91,7 @@ export class SyncOperations {
 
     if (!confirmed) {
       setSyncFooter(this.ctx, local, remote, state);
-      this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
-      this.ctx.ui.notify("Push cancelled.", "info");
+        this.ctx.ui.notify("Push cancelled.", "info");
 
       return;
     }
@@ -104,7 +103,7 @@ export class SyncOperations {
    * Pull remote Git config into the local Pi config directory.
    */
   async pull(): Promise<void> {
-    this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, "🔄 pulling");
+    this.ctx.ui.setStatus(STATUS_KEY, "🔄 pulling");
     const { config, local, remote, state } = await syncInputs();
 
     setSyncFooter(this.ctx, local, remote, state);
@@ -134,8 +133,7 @@ export class SyncOperations {
 
     if (!confirmed) {
       setSyncFooter(this.ctx, local, remote, state);
-      this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
-      this.ctx.ui.notify("Pull cancelled.", "info");
+        this.ctx.ui.notify("Pull cancelled.", "info");
 
       return;
     }
@@ -270,8 +268,7 @@ export class SyncOperations {
 
     if (!confirmed) {
       await refreshSyncFooter(this.ctx);
-      this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
-      this.ctx.ui.notify("Checkout cancelled.", "info");
+        this.ctx.ui.notify("Checkout cancelled.", "info");
 
       return;
     }
@@ -289,7 +286,6 @@ export class SyncOperations {
 
     await writeSyncState(remote, await new GitStore(config).currentCommit());
     await refreshSyncFooter(this.ctx);
-    this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
 
     if (!this.options.silent) {
       this.ctx.ui.notify(
@@ -319,7 +315,6 @@ export class SyncOperations {
 
     await writeSyncState(remote, await new GitStore(config).currentCommit());
     await refreshSyncFooter(this.ctx);
-    this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
 
     if (!this.options.silent) {
       this.ctx.ui.notify(
@@ -342,7 +337,6 @@ export class SyncOperations {
 
     await writeSyncState(local, after !== "" ? after : before);
     await refreshSyncFooter(this.ctx);
-    this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
 
     if (!this.options.silent) {
       this.ctx.ui.notify(
@@ -363,7 +357,6 @@ export class SyncOperations {
     const warnings = await applySnapshot(remote, config.policy);
 
     await refreshSyncFooter(this.ctx);
-    this.ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
     this.ctx.ui.notify(
       [
         `Checked out ${remote.id} locally. Remote was not changed. Backup: ${backup}`,
