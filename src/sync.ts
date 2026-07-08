@@ -44,7 +44,7 @@ export default function sync(pi: ExtensionAPI): void {
 
   pi.on("session_start", (_event, ctx) => {
     ctx.ui.setStatus(ACTIVITY_STATUS_KEY, undefined);
-    ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg("muted", "PI-SYNC: loading"));
+    ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg("muted", "checking"));
     startAutoSyncInBackground(ctx, warningState);
   });
 
