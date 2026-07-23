@@ -55,19 +55,19 @@ import { SyncOperations } from "./operations.js";
  * @param rawArgs Raw argument string after /pisync.
  * @param ctx Pi command context used for UI and session operations.
  */
-export type AppendDiffEntry = (diff: SnapshotDiff) => void;
+export type ReviewDiff = (diff: SnapshotDiff) => Promise<void>;
 
 export async function handleCommand(
   rawArgs: string,
   ctx: ExtensionCommandContext,
-  appendDiffEntry?: AppendDiffEntry,
+  reviewDiff?: ReviewDiff,
 ): Promise<void> {
   const [subcommand = "status", ...rest] = splitArgs(rawArgs);
   const options = parseOptions(rest);
 
   try {
     await ensureStateDir();
-    await runCommand(subcommand, options, ctx, appendDiffEntry);
+    await runCommand(subcommand, options, ctx, reviewDiff);
   } catch (error) {
     try {
       await refreshSyncFooter(ctx);
@@ -82,7 +82,7 @@ async function runCommand(
   subcommand: string,
   options: CommandOptions,
   ctx: ExtensionCommandContext,
-  appendDiffEntry?: AppendDiffEntry,
+  reviewDiff?: ReviewDiff,
 ): Promise<void> {
   switch (subcommand) {
     case "help":
@@ -101,12 +101,8 @@ async function runCommand(
       await status(ctx, options);
 
       return;
-    case "changes":
-      await changes(ctx);
-
-      return;
     case "diff":
-      await diff(ctx, options, appendDiffEntry);
+      await diff(ctx, options, reviewDiff);
 
       return;
     case "doctor":
@@ -245,40 +241,10 @@ function formatPathList(paths: string[]): string[] {
   return paths.map((item) => `- ${item}`);
 }
 
-async function changes(ctx: ExtensionCommandContext): Promise<void> {
-  ctx.ui.setStatus(STATUS_KEY, "checking");
-  const { local, remote, state } = await syncInputs();
-
-  setSyncFooter(ctx, local, remote, state);
-  const stateHashes = comparableStateHashes(local, remote, state);
-  const localPaths = changedPaths(fileHashMap(local), stateHashes);
-  const remotePaths = changedPaths(
-    remote != null ? fileHashMap(remote) : {},
-    stateHashes,
-  );
-  const totalChanged = localPaths.length + remotePaths.length;
-  const messages = [`changed paths: ${totalChanged}`];
-
-  if (localPaths.length > 0) {
-    messages.push(`local changed paths (${localPaths.length}):`, ...formatPathList(localPaths));
-  }
-  if (remotePaths.length > 0) {
-    messages.push(
-      `remote changed paths (${remotePaths.length}):`,
-      ...formatPathList(remotePaths),
-    );
-  }
-  if (totalChanged === 0) {
-    messages.push("no changed paths");
-  }
-
-  ctx.ui.notify(messages.join("\n"), totalChanged > 0 ? "warning" : "info");
-}
-
 async function diff(
   ctx: ExtensionCommandContext,
   options: CommandOptions,
-  appendDiffEntry?: AppendDiffEntry,
+  reviewDiff?: ReviewDiff,
 ): Promise<void> {
   ctx.ui.setStatus(STATUS_KEY, "diffing");
 
@@ -306,8 +272,8 @@ async function diff(
     return;
   }
 
-  if (ctx.mode === "tui" && appendDiffEntry != null) {
-    appendDiffEntry(snapshotDiff);
+  if (ctx.mode === "tui" && reviewDiff != null) {
+    await reviewDiff(snapshotDiff);
 
     return;
   }

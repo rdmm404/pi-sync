@@ -143,7 +143,6 @@ Environment overrides are also supported: `PI_SYNC_REPOSITORY` (or `PI_SYNC_REPO
 /pisync config
 /pisync doctor
 /pisync status [--verbose]
-/pisync changes
 /pisync diff [<commit-ish>]
 /pisync push
 /pisync pull
@@ -160,7 +159,6 @@ Command guide:
 | `/pisync init`                  | Configure pi-sync for this machine.                                   |
 | `/pisync doctor`                | Verify config, Git access, secret scan, and lock status.              |
 | `/pisync status [--verbose]`    | Check local/remote drift and optionally list changed paths.           |
-| `/pisync changes`               | List changed local and remote paths without showing diffs.            |
 | `/pisync diff [<commit-ish>]`  | Review styled differences before pushing, pulling, or checkout.        |
 | `/pisync push`                  | Publish local Pi settings to the Git repo.                            |
 | `/pisync pull`                  | Apply remote Git settings locally after backup and confirmation.      |
@@ -213,7 +211,7 @@ themes/
 extensions/
 ```
 
-It excludes `.env*`, `node_modules`, `.git`, `.pisync`, `pi-sync.json`, and paths containing `secret` or `token`, and it refuses to push common API-key patterns. Policy excludes are applied in addition to those hard safety denies. In interactive Pi, `/pisync diff [<commit-ish>]` renders per-file changes using Pi's edit-style diff presentation. Non-TUI modes return textual `git diff --no-index` output. Pull and checkout confirmations show concise summaries and direct you to the review command instead of embedding raw diffs.
+It excludes `.env*`, `node_modules`, `.git`, `.pisync`, `pi-sync.json`, and paths containing `secret` or `token`, and it refuses to push common API-key patterns. Policy excludes are applied in addition to those hard safety denies. In interactive Pi, `/pisync diff [<commit-ish>]` opens a file-tree diff viewer with syntax-highlighted code, vertical and horizontal scrolling, and hunk navigation. Moving through the tree previews files immediately; Enter focuses the diff pane and Esc returns to the tree. Non-TUI modes return textual `git diff --no-index` output. Pull and checkout confirmations show concise summaries and direct you to the review command instead of embedding raw diffs.
 
 ### Settings and packages
 

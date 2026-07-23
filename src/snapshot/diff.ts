@@ -22,6 +22,10 @@ export type SnapshotDiffFile =
       status: "added" | "modified" | "deleted";
       kind: "text";
       diff: string;
+      /** Original content used only by the transient interactive viewer. */
+      oldText: string;
+      /** Current content used only by the transient interactive viewer. */
+      newText: string;
     }
   | {
       path: string;
@@ -80,7 +84,14 @@ export function createSnapshotDiff(
     const newText = snapshotText(localFile);
     const result = generateDiffString(oldText, newText);
 
-    files.push({ path: filePath, status, kind: "text", diff: result.diff });
+    files.push({
+      path: filePath,
+      status,
+      kind: "text",
+      diff: result.diff,
+      oldText,
+      newText,
+    });
   }
 
   return {

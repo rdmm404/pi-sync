@@ -1,9 +1,8 @@
 import {
   type ExtensionAPI,
   type ExtensionContext,
-  renderDiff,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Text } from "@earendil-works/pi-tui";
+import { Text } from "@earendil-works/pi-tui";
 
 import { isEnabled } from "./commands/args.js";
 import { handleCommand } from "./commands/commands.js";
@@ -18,7 +17,13 @@ import {
 import { AUTO_SYNC_OPTIONS, STATUS_KEY } from "./domain/constants.js";
 import type { SnapshotDiff } from "./snapshot/diff.js";
 import { ensureStateDir, withLock } from "./state/lock.js";
+import { openDiffViewer } from "./ui/diff-viewer.js";
 import { errorMessage } from "./utils/json-utils.js";
+
+type SnapshotDiffSummary = {
+  target: string;
+  changedFiles: number;
+};
 
 export { isEnabled, parseOptions, splitArgs } from "./commands/args.js";
 export { preflightSnapshotApply } from "./snapshot/apply.js";
@@ -33,7 +38,7 @@ export { posixJoin, safeJoin } from "./utils/path-utils.js";
 export default function sync(pi: ExtensionAPI): void {
   const warningState = { autoSyncWarningShown: false };
 
-  pi.registerEntryRenderer<SnapshotDiff>(
+  pi.registerEntryRenderer<SnapshotDiff | SnapshotDiffSummary>(
     "pisync-diff",
     (entry, _options, theme) => {
       const data = entry.data;
@@ -46,47 +51,24 @@ export default function sync(pi: ExtensionAPI): void {
         );
       }
 
-      const box = new Box(1, 1);
-      const target = data.remote.target ?? data.remote.id ?? "empty remote";
+      const summary =
+        "files" in data
+          ? {
+              target: data.remote.target ?? data.remote.id ?? "empty remote",
+              changedFiles: data.files.length,
+            }
+          : data;
 
-      box.addChild(
-        new Text(theme.fg("accent", theme.bold("pi-sync diff")), 0, 0),
+      return new Text(
+        theme.fg(
+          "accent",
+          theme.bold(
+            `pi-sync diff viewed: ${summary.changedFiles} changed file${summary.changedFiles === 1 ? "" : "s"} against ${summary.target}`,
+          ),
+        ),
+        1,
+        0,
       );
-      box.addChild(
-        new Text(`target: ${target} (${data.remote.fileCount} files)`, 0, 0),
-      );
-      box.addChild(new Text(`local: ${data.local.fileCount} files`, 0, 0));
-      box.addChild(new Text(`changed files: ${data.files.length}`, 0, 0));
-
-      for (const file of data.files) {
-        const statusColor =
-          file.status === "added"
-            ? "success"
-            : file.status === "deleted"
-              ? "error"
-              : "warning";
-        const label = `${file.status} ${file.path}${file.kind === "binary" ? " (binary)" : ""}`;
-
-        box.addChild(
-          new Text(theme.fg(statusColor, theme.bold(label)), 0, 1),
-        );
-
-        if (file.kind === "binary") {
-          box.addChild(
-            new Text(
-              theme.fg("muted", "Binary content is not rendered."),
-              0,
-              0,
-            ),
-          );
-        } else {
-          box.addChild(
-            new Text(renderDiff(file.diff, { filePath: file.path }), 0, 0),
-          );
-        }
-      }
-
-      return box;
     },
   );
 
@@ -94,9 +76,14 @@ export default function sync(pi: ExtensionAPI): void {
     description: "Sync Pi settings through a Git repository",
     getArgumentCompletions: completePisyncArguments,
     handler: async (args, ctx) => {
-      await handleCommand(args, ctx, (diff) => {
+      await handleCommand(args, ctx, async (diff) => {
         if (ctx.mode === "tui") {
-          pi.appendEntry<SnapshotDiff>("pisync-diff", diff);
+          await openDiffViewer(ctx, diff);
+          const target = diff.remote.target ?? diff.remote.id ?? "empty remote";
+          pi.appendEntry<SnapshotDiffSummary>("pisync-diff", {
+            target,
+            changedFiles: diff.files.length,
+          });
         }
       });
     },
