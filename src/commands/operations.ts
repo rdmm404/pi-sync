@@ -9,6 +9,7 @@ import type {
 import { loadConfig } from "../config/config.js";
 import { STATUS_KEY } from "../domain/constants.js";
 import type { CommandOptions, Snapshot, SyncConfig } from "../domain/types.js";
+import { generateCommitMessage } from "../git/commit-message.js";
 import { GitStore } from "../git/store.js";
 import { applySnapshot } from "../snapshot/apply.js";
 import {
@@ -333,7 +334,30 @@ export class SyncOperations {
 
     await gitStore.writeSnapshot(local);
     const before = await gitStore.currentCommit();
-    const committed = await gitStore.commitAndPush(`pi-sync: ${local.id}`);
+    const hasChanges = await gitStore.stageChanges();
+    const fallbackMessage = `pi-sync: ${local.id}`;
+    let commitMessage = fallbackMessage;
+
+    if (hasChanges) {
+      const generated = await generateCommitMessage(
+        this.ctx,
+        config.commitMessageModel,
+        await gitStore.stagedDiff(),
+      );
+
+      if (generated.message != null) {
+        commitMessage = generated.message;
+      }
+
+      if (generated.warning != null && !this.options.silent) {
+        this.ctx.ui.notify(
+          `${generated.warning} Using fallback commit message.`,
+          "warning",
+        );
+      }
+    }
+
+    const committed = await gitStore.commitAndPush(commitMessage);
     const after = await gitStore.currentCommit();
 
     await writeSyncState(local, after !== "" ? after : before);
@@ -342,7 +366,7 @@ export class SyncOperations {
     if (!this.options.silent) {
       this.ctx.ui.notify(
         committed
-          ? `Pushed ${local.files.length} files as ${local.id}.`
+          ? `Pushed ${local.files.length} files as ${local.id}. Commit: ${commitMessage}`
           : "No Git changes to push.",
         "info",
       );

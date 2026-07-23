@@ -104,15 +104,29 @@ export class GitStore {
   }
 
   /**
+   * Stage sync changes and report whether the clone has changes to commit.
+   */
+  async stageChanges(): Promise<boolean> {
+    await this.run(["add", "-A"]);
+    const status = await this.run(["status", "--porcelain"]);
+
+    return status.trim().length > 0;
+  }
+
+  /**
+   * Read the staged diff used to describe an upcoming sync commit.
+   */
+  async stagedDiff(): Promise<string> {
+    return this.run(["diff", "--cached", "--no-ext-diff", "--unified=3", "--"]);
+  }
+
+  /**
    * Commit staged sync changes and push them to the configured branch.
    *
    * @param message Commit message.
    */
   async commitAndPush(message: string): Promise<boolean> {
-    await this.run(["add", "-A"]);
-    const status = await this.run(["status", "--porcelain"]);
-
-    if (status.trim().length === 0) {
+    if (!(await this.stageChanges())) {
       return false;
     }
 

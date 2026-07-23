@@ -391,6 +391,7 @@ __metadata:
     typescript: "npm:^5.9.0"
     typescript-eslint: "npm:^8.63.0"
   peerDependencies:
+    "@earendil-works/pi-ai": ">=0.81.1"
     "@earendil-works/pi-coding-agent": ">=0.81.1"
     "@earendil-works/pi-tui": ">=0.81.1"
   languageName: unknown

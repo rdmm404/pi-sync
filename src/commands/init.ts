@@ -70,11 +70,17 @@ async function promptConfig(
     "Enable auto-sync?",
     "Auto-sync pulls safe remote changes on session start but never pushes local changes automatically.",
   );
+  const commitMessageModel = await promptOptional(
+    ctx,
+    "Commit message model (optional)",
+    "provider/model-id; blank uses the active Pi model",
+  );
 
   return {
     repository,
     branch: branch === "" ? DEFAULT_BRANCH : branch,
     autoSync,
+    ...(commitMessageModel === "" ? {} : { commitMessageModel }),
   };
 }
 

@@ -158,6 +158,7 @@ async function showConfig(ctx: ExtensionCommandContext): Promise<void> {
       `repository: ${partial.repository ?? "missing"}`,
       `branch: ${partial.branch ?? DEFAULT_BRANCH}`,
       `autoSync: ${isEnabled(partial.autoSync ?? process.env.PI_SYNC_AUTO_SYNC, true) ? "enabled" : "disabled"}`,
+      `commit message model: ${partial.commitMessageModel ?? process.env.PI_SYNC_COMMIT_MESSAGE_MODEL ?? "active Pi model"}`,
       `local config: ${localConfigPath()}`,
       `local clone: ${repoDir()}`,
     ].join("\n"),
@@ -301,6 +302,9 @@ async function doctor(ctx: ExtensionCommandContext): Promise<void> {
 
     messages.push(
       `config: ok (${config.repository}#${config.branch}/repo-root)`,
+    );
+    messages.push(
+      `commit message model: ${config.commitMessageModel ?? "active Pi model"}`,
     );
     const includedPaths = policy.included.map((item) => item.path).join(", ");
     const excludedPaths = policy.excluded.join(", ");

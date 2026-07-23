@@ -98,7 +98,7 @@ Run inside Pi:
 /pisync init
 ```
 
-The init flow asks for a Git repository URL, branch, and whether auto-sync should be enabled. HTTPS GitHub URLs are recommended because they can reuse an existing GitHub CLI login or Git credential helper without SSH key setup.
+The init flow asks for a Git repository URL, branch, whether auto-sync should be enabled, and an optional commit-message model (`provider/model-id`). HTTPS GitHub URLs are recommended because they can reuse an existing GitHub CLI login or Git credential helper without SSH key setup.
 
 The generated local-only file is stored at:
 
@@ -115,6 +115,7 @@ Example:
   "repository": "https://github.com/<user>/<repo>.git",
   "branch": "main",
   "autoSync": true,
+  "commitMessageModel": "openai/gpt-5.2",
   "policy": {
     "includeDefaults": true,
     "includePaths": [],
@@ -130,12 +131,13 @@ Policy fields are optional:
 - `includePaths`: extra relative paths under the Pi dir to sync.
 - `excludePaths`: relative paths under the Pi dir to skip; excludes win over includes.
 - `stripSettingsKeys`: extra top-level `settings.json` keys to keep machine-local.
+- `commitMessageModel`: optional `provider/model-id` used to generate one-line commit subjects. If omitted, the currently selected Pi model is used. If generation fails, pi-sync falls back to its deterministic `pi-sync: <snapshot-id>` message.
+
+Environment overrides are also supported: `PI_SYNC_REPOSITORY` (or `PI_SYNC_REPO`), `PI_SYNC_BRANCH`, `PI_SYNC_AUTO_SYNC`, and `PI_SYNC_COMMIT_MESSAGE_MODEL`. Run `/pisync doctor` after setup to verify repository access and configuration, and get auth-specific guidance.
 
 Use blacklist mode by keeping `includeDefaults: true` and adding excludes. Use whitelist mode by setting `includeDefaults: false` and listing only the paths you want in `includePaths`.
 
 For GitHub HTTPS repositories, `/pisync init` can optionally run `gh auth setup-git` after confirming with you. This lets Git reuse your existing GitHub CLI login. SSH URLs still require normal SSH key and ssh-agent setup.
-
-Environment overrides are also supported: `PI_SYNC_REPOSITORY` (or `PI_SYNC_REPO`), `PI_SYNC_BRANCH`, and `PI_SYNC_AUTO_SYNC`. Run `/pisync doctor` after setup to verify repository access and get auth-specific guidance.
 
 ## Commands
 
