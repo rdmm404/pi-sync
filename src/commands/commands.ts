@@ -18,7 +18,11 @@ import type {
 import { GitStore, syncPathspecs } from "../git/store.js";
 import { effectivePolicy } from "../policy/policy.js";
 import { isPortableSettingsEntry, settingsEntrySource } from "../settings/settings.js";
-import { formatGitTextDiff } from "../snapshot/diff.js";
+import {
+  createSnapshotDiff,
+  formatGitTextDiff,
+  type SnapshotDiff,
+} from "../snapshot/diff.js";
 import {
   createSnapshot,
   fileHashMap,
@@ -51,16 +55,19 @@ import { SyncOperations } from "./operations.js";
  * @param rawArgs Raw argument string after /pisync.
  * @param ctx Pi command context used for UI and session operations.
  */
+export type AppendDiffEntry = (diff: SnapshotDiff) => void;
+
 export async function handleCommand(
   rawArgs: string,
   ctx: ExtensionCommandContext,
+  appendDiffEntry?: AppendDiffEntry,
 ): Promise<void> {
   const [subcommand = "status", ...rest] = splitArgs(rawArgs);
   const options = parseOptions(rest);
 
   try {
     await ensureStateDir();
-    await runCommand(subcommand, options, ctx);
+    await runCommand(subcommand, options, ctx, appendDiffEntry);
   } catch (error) {
     try {
       await refreshSyncFooter(ctx);
@@ -75,6 +82,7 @@ async function runCommand(
   subcommand: string,
   options: CommandOptions,
   ctx: ExtensionCommandContext,
+  appendDiffEntry?: AppendDiffEntry,
 ): Promise<void> {
   switch (subcommand) {
     case "help":
@@ -98,7 +106,7 @@ async function runCommand(
 
       return;
     case "diff":
-      await diff(ctx);
+      await diff(ctx, options, appendDiffEntry);
 
       return;
     case "doctor":
@@ -267,14 +275,45 @@ async function changes(ctx: ExtensionCommandContext): Promise<void> {
   ctx.ui.notify(messages.join("\n"), totalChanged > 0 ? "warning" : "info");
 }
 
-async function diff(ctx: ExtensionCommandContext): Promise<void> {
+async function diff(
+  ctx: ExtensionCommandContext,
+  options: CommandOptions,
+  appendDiffEntry?: AppendDiffEntry,
+): Promise<void> {
   ctx.ui.setStatus(STATUS_KEY, "diffing");
-  const { local, remote, state } = await syncInputs();
 
-  setSyncFooter(ctx, local, remote, state);
-  const output = await formatGitTextDiff(local, remote);
+  if (options.args.length > 1) {
+    throw new Error("Usage: /pisync diff [<commit-ish>]");
+  }
 
-  ctx.ui.notify(output, output === NO_DIFF_MESSAGE ? "info" : "warning");
+  const target = options.args.at(0);
+  const inputs = await syncInputs();
+  const remote =
+    target == null
+      ? inputs.remote
+      : await new GitStore(inputs.config).readSnapshot(target);
+
+  if (target != null && remote == null) {
+    throw new Error(`Snapshot not found at commit-ish: ${target}`);
+  }
+
+  setSyncFooter(ctx, inputs.local, inputs.remote, inputs.state);
+  const snapshotDiff = createSnapshotDiff(inputs.local, remote, target);
+
+  if (snapshotDiff.files.length === 0) {
+    ctx.ui.notify(NO_DIFF_MESSAGE, "info");
+
+    return;
+  }
+
+  if (ctx.mode === "tui" && appendDiffEntry != null) {
+    appendDiffEntry(snapshotDiff);
+
+    return;
+  }
+
+  const output = await formatGitTextDiff(inputs.local, remote);
+  ctx.ui.notify(output, "warning");
 }
 
 async function doctor(ctx: ExtensionCommandContext): Promise<void> {

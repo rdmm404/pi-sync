@@ -144,7 +144,7 @@ Environment overrides are also supported: `PI_SYNC_REPOSITORY` (or `PI_SYNC_REPO
 /pisync doctor
 /pisync status [--verbose]
 /pisync changes
-/pisync diff
+/pisync diff [<commit-ish>]
 /pisync push
 /pisync pull
 /pisync sync
@@ -161,7 +161,7 @@ Command guide:
 | `/pisync doctor`                | Verify config, Git access, secret scan, and lock status.              |
 | `/pisync status [--verbose]`    | Check local/remote drift and optionally list changed paths.           |
 | `/pisync changes`               | List changed local and remote paths without showing diffs.            |
-| `/pisync diff`                  | Review textual differences before pushing or pulling.                 |
+| `/pisync diff [<commit-ish>]`  | Review styled differences before pushing, pulling, or checkout.        |
 | `/pisync push`                  | Publish local Pi settings to the Git repo.                            |
 | `/pisync pull`                  | Apply remote Git settings locally after backup and confirmation.      |
 | `/pisync sync`                  | Conservatively push or pull when only one side changed.               |
@@ -213,7 +213,7 @@ themes/
 extensions/
 ```
 
-It excludes `.env*`, `node_modules`, `.git`, `.pisync`, `pi-sync.json`, and paths containing `secret` or `token`, and it refuses to push common API-key patterns. Policy excludes are applied in addition to those hard safety denies. `/pisync diff` and confirmation prompts use textual `git diff --no-index` output between remote files and local files.
+It excludes `.env*`, `node_modules`, `.git`, `.pisync`, `pi-sync.json`, and paths containing `secret` or `token`, and it refuses to push common API-key patterns. Policy excludes are applied in addition to those hard safety denies. In interactive Pi, `/pisync diff [<commit-ish>]` renders per-file changes using Pi's edit-style diff presentation. Non-TUI modes return textual `git diff --no-index` output. Pull and checkout confirmations show concise summaries and direct you to the review command instead of embedding raw diffs.
 
 ### Settings and packages
 
@@ -230,7 +230,7 @@ If one machine adds a portable npm/git package to synced settings, another machi
 ### Current limitations
 
 - Named profiles are not supported yet. Use policy includes/excludes or separate `PI_CODING_AGENT_DIR` values for now.
-- Conflict UX is intentionally unchanged. Use `/pisync status --verbose` or `/pisync diff`, then resolve manually with `/pisync push --force` or `/pisync pull --force`.
+- Conflict UX is intentionally conservative. Use `/pisync status --verbose` or `/pisync diff`, then resolve manually with `/pisync push --force` or `/pisync pull --force`.
 
 ## Safety
 

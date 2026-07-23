@@ -1,7 +1,9 @@
-import type {
-  ExtensionAPI,
-  ExtensionContext,
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  renderDiff,
 } from "@earendil-works/pi-coding-agent";
+import { Box, Text } from "@earendil-works/pi-tui";
 
 import { isEnabled } from "./commands/args.js";
 import { handleCommand } from "./commands/commands.js";
@@ -14,6 +16,7 @@ import {
   loadPartialConfig,
 } from "./config/config.js";
 import { AUTO_SYNC_OPTIONS, STATUS_KEY } from "./domain/constants.js";
+import type { SnapshotDiff } from "./snapshot/diff.js";
 import { ensureStateDir, withLock } from "./state/lock.js";
 import { errorMessage } from "./utils/json-utils.js";
 
@@ -30,11 +33,72 @@ export { posixJoin, safeJoin } from "./utils/path-utils.js";
 export default function sync(pi: ExtensionAPI): void {
   const warningState = { autoSyncWarningShown: false };
 
+  pi.registerEntryRenderer<SnapshotDiff>(
+    "pisync-diff",
+    (entry, _options, theme) => {
+      const data = entry.data;
+
+      if (data == null) {
+        return new Text(
+          theme.fg("error", "pi-sync diff data is missing."),
+          1,
+          0,
+        );
+      }
+
+      const box = new Box(1, 1);
+      const target = data.remote.target ?? data.remote.id ?? "empty remote";
+
+      box.addChild(
+        new Text(theme.fg("accent", theme.bold("pi-sync diff")), 0, 0),
+      );
+      box.addChild(
+        new Text(`target: ${target} (${data.remote.fileCount} files)`, 0, 0),
+      );
+      box.addChild(new Text(`local: ${data.local.fileCount} files`, 0, 0));
+      box.addChild(new Text(`changed files: ${data.files.length}`, 0, 0));
+
+      for (const file of data.files) {
+        const statusColor =
+          file.status === "added"
+            ? "success"
+            : file.status === "deleted"
+              ? "error"
+              : "warning";
+        const label = `${file.status} ${file.path}${file.kind === "binary" ? " (binary)" : ""}`;
+
+        box.addChild(
+          new Text(theme.fg(statusColor, theme.bold(label)), 0, 1),
+        );
+
+        if (file.kind === "binary") {
+          box.addChild(
+            new Text(
+              theme.fg("muted", "Binary content is not rendered."),
+              0,
+              0,
+            ),
+          );
+        } else {
+          box.addChild(
+            new Text(renderDiff(file.diff, { filePath: file.path }), 0, 0),
+          );
+        }
+      }
+
+      return box;
+    },
+  );
+
   pi.registerCommand("pisync", {
     description: "Sync Pi settings through a Git repository",
     getArgumentCompletions: completePisyncArguments,
     handler: async (args, ctx) => {
-      await handleCommand(args, ctx);
+      await handleCommand(args, ctx, (diff) => {
+        if (ctx.mode === "tui") {
+          pi.appendEntry<SnapshotDiff>("pisync-diff", diff);
+        }
+      });
     },
   });
 

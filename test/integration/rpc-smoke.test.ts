@@ -410,6 +410,8 @@ void test(
         );
         git(["push", "origin", "main"], fixture.remoteWorktree);
 
+        await laptop.prompt("/pisync diff");
+        await laptop.prompt("/pisync diff HEAD");
         await laptop.prompt("/pisync pull --yes --force");
         await assertFile(path.join(fixture.laptopPiDir, "prompts/remote.md"));
       },

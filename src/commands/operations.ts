@@ -11,7 +11,6 @@ import { STATUS_KEY } from "../domain/constants.js";
 import type { CommandOptions, Snapshot, SyncConfig } from "../domain/types.js";
 import { GitStore } from "../git/store.js";
 import { applySnapshot } from "../snapshot/apply.js";
-import { formatGitTextDiff } from "../snapshot/diff.js";
 import {
   createSnapshot,
   fileHashMap,
@@ -125,11 +124,12 @@ export class SyncOperations {
       );
     }
 
-    const diffOutput = await formatGitTextDiff(local, remote);
-
     const confirmed = this.options.yes
       ? true
-      : await this.ctx.ui.confirm("Pull pi settings?", diffOutput);
+      : await this.ctx.ui.confirm(
+          "Pull pi settings?",
+          formatPullSummary(local, remote),
+        );
 
     if (!confirmed) {
       setSyncFooter(this.ctx, local, remote, state);
@@ -260,11 +260,12 @@ export class SyncOperations {
       throw new Error(`Snapshot not found at commit-ish: ${target}`);
     }
 
-    const diffOutput = await formatGitTextDiff(local, remote);
-
     const confirmed = this.options.yes
       ? true
-      : await this.ctx.ui.confirm("Check out pi settings locally?", diffOutput);
+      : await this.ctx.ui.confirm(
+          "Check out pi settings locally?",
+          formatCheckoutSummary(local, remote, target),
+        );
 
     if (!confirmed) {
       await refreshSyncFooter(this.ctx);
@@ -425,6 +426,30 @@ async function backupLocal(config: SyncConfig): Promise<string> {
   await fs.writeFile(backupPath, JSON.stringify(snapshot, null, "\t"));
 
   return backupPath;
+}
+
+function formatPullSummary(local: Snapshot, remote: Snapshot): string {
+  return [
+    `Remote latest: ${remote.id} (${remote.files.length} files).`,
+    `Local files: ${local.files.length}.`,
+    "Changes are not shown in this confirmation.",
+    "Run /pisync diff to review them before pulling.",
+    "A local backup will be created before applying changes.",
+  ].join("\n");
+}
+
+function formatCheckoutSummary(
+  local: Snapshot,
+  remote: Snapshot,
+  target: string,
+): string {
+  return [
+    `Checkout target: ${target} (${remote.files.length} files).`,
+    `Local files: ${local.files.length}.`,
+    "Changes are not shown in this confirmation.",
+    `Run /pisync diff ${target} to review them before checkout.`,
+    "A local backup will be created before applying changes.",
+  ].join("\n");
 }
 
 function formatPushSummary(

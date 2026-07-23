@@ -40,10 +40,10 @@ const SUBCOMMAND_COMPLETIONS: SubcommandCompletion[] = [
   },
   {
     value: "diff",
-    label: "diff",
+    label: "diff [<commit-ish>]",
     description:
-      "Show a textual Git diff between local files and remote files.",
-    keywords: ["changes", "compare"],
+      "Review styled changes against the latest remote or a historical commit.",
+    keywords: ["changes", "compare", "review", "commit"],
   },
   {
     value: "doctor",
@@ -63,7 +63,7 @@ const SUBCOMMAND_COMPLETIONS: SubcommandCompletion[] = [
     value: "pull",
     label: "pull",
     description:
-      "Apply remote Git settings locally after diff confirmation and backup.",
+      "Apply remote Git settings locally after review guidance and backup.",
     keywords: ["download", "apply"],
   },
   {
