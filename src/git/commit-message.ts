@@ -1,5 +1,4 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 type CommitMessageResult = {
@@ -36,45 +35,38 @@ export async function generateCommitMessage(
         };
   }
 
-  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-
-  if (!auth.ok) {
-    return {
-      warning: `Commit message model authentication failed: ${auth.error}`,
-    };
-  }
-
-  if (auth.apiKey == null || auth.apiKey === "") {
-    return {
-      warning: `No API key available for commit message model: ${model.provider}/${model.id}`,
-    };
-  }
-
   try {
-    const response = await complete(
-      model,
-      {
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: buildPrompt(diff),
-              },
-            ],
-            timestamp: Date.now(),
-          },
-        ],
-      },
-      {
-        apiKey: auth.apiKey,
-        headers: auth.headers,
-        env: auth.env,
-        maxTokens: 120,
-        signal: ctx.signal,
-      },
-    );
+    // Route through the registry so extension-registered providers (custom
+    // APIs) and request-time authentication are handled by Pi itself.
+    const response = await ctx.modelRegistry
+      .streamSimple(
+        model,
+        {
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: buildPrompt(diff),
+                },
+              ],
+              timestamp: Date.now(),
+            },
+          ],
+        },
+        {
+          maxTokens: 120,
+          signal: ctx.signal,
+        },
+      )
+      .result();
+
+    if (response.stopReason === "error" || response.stopReason === "aborted") {
+      return {
+        warning: `Commit message generation failed: ${response.errorMessage ?? response.stopReason}`,
+      };
+    }
 
     const message = normalizeCommitMessage(
       response.content
