@@ -21,6 +21,7 @@ export async function loadConfig(): Promise<SyncConfig> {
     repository,
     branch: partial.branch ?? DEFAULT_BRANCH,
     autoSync: partial.autoSync ?? true,
+    autoPush: partial.autoPush ?? false,
     commitMessageModel: partial.commitMessageModel,
     policy: normalizePolicy(partial.policy),
   };
@@ -41,6 +42,7 @@ export async function loadPartialConfig(): Promise<PartialConfig> {
       fileConfig.repository,
     branch: process.env.PI_SYNC_BRANCH ?? fileConfig.branch,
     autoSync: process.env.PI_SYNC_AUTO_SYNC ?? fileConfig.autoSync,
+    autoPush: process.env.PI_SYNC_AUTO_PUSH ?? fileConfig.autoPush,
     commitMessageModel:
       process.env.PI_SYNC_COMMIT_MESSAGE_MODEL ?? fileConfig.commitMessageModel,
   };

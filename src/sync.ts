@@ -129,6 +129,10 @@ async function autoSync(
     await withLock("auto-sync", async () => {
       await new SyncOperations(ctx, AUTO_SYNC_OPTIONS, {
         notifyAutoSyncWarnings: !warningState.autoSyncWarningShown,
+        autoPush: isEnabled(
+          partial.autoPush ?? process.env.PI_SYNC_AUTO_PUSH,
+          false,
+        ),
       }).autoSync();
     });
     warningState.autoSyncWarningShown = true;

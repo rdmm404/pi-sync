@@ -33,6 +33,7 @@ import {
 
 type SyncOperationSettings = {
   notifyAutoSyncWarnings: boolean;
+  autoPush?: boolean;
 };
 
 /**
@@ -188,7 +189,7 @@ export class SyncOperations {
   }
 
   /**
-   * Pull remote changes during auto-sync, but never push local changes automatically.
+   * Pull remote changes during auto-sync. Local changes are only pushed when autoPush is enabled.
    */
   async autoSync(): Promise<void> {
     const { config, local, remote, state } = await syncInputs();
@@ -217,6 +218,13 @@ export class SyncOperations {
 
     if (remoteChanged) {
       await this.pull();
+
+      return;
+    }
+
+    if ((localChanged || remote == null) && this.settings.autoPush === true) {
+      await this.push();
+      this.ctx.ui.notify("pi-sync auto-pushed local changes.", "info");
 
       return;
     }

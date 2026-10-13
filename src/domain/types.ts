@@ -16,6 +16,7 @@ export type SyncConfig = {
   repository: string;
   branch: string;
   autoSync: boolean | string;
+  autoPush: boolean | string;
   commitMessageModel?: string;
   policy: NormalizedSyncPolicy;
 };
@@ -24,6 +25,7 @@ export type PartialConfig = {
   repository?: string;
   branch?: string;
   autoSync?: boolean | string;
+  autoPush?: boolean | string;
   commitMessageModel?: string;
   policy?: SyncPolicy;
 };

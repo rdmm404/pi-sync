@@ -115,6 +115,7 @@ Example:
   "repository": "https://github.com/<user>/<repo>.git",
   "branch": "main",
   "autoSync": true,
+  "autoPush": false,
   "commitMessageModel": "openai/gpt-5.2",
   "policy": {
     "includeDefaults": true,
@@ -133,7 +134,7 @@ Policy fields are optional:
 - `stripSettingsKeys`: extra top-level `settings.json` keys to keep machine-local.
 - `commitMessageModel`: optional `provider/model-id` used to generate one-line commit subjects. If omitted, the currently selected Pi model is used. If generation fails, pi-sync falls back to its deterministic `pi-sync: <snapshot-id>` message.
 
-Environment overrides are also supported: `PI_SYNC_REPOSITORY` (or `PI_SYNC_REPO`), `PI_SYNC_BRANCH`, `PI_SYNC_AUTO_SYNC`, and `PI_SYNC_COMMIT_MESSAGE_MODEL`. Run `/pisync doctor` after setup to verify repository access and configuration, and get auth-specific guidance.
+Environment overrides are also supported: `PI_SYNC_REPOSITORY` (or `PI_SYNC_REPO`), `PI_SYNC_BRANCH`, `PI_SYNC_AUTO_SYNC`, `PI_SYNC_AUTO_PUSH`, and `PI_SYNC_COMMIT_MESSAGE_MODEL`. Run `/pisync doctor` after setup to verify repository access and configuration, and get auth-specific guidance.
 
 Use blacklist mode by keeping `includeDefaults: true` and adding excludes. Use whitelist mode by setting `includeDefaults: false` and listing only the paths you want in `includePaths`.
 
@@ -240,7 +241,7 @@ If one machine adds a portable npm/git package to synced settings, another machi
 - Pull and checkout apply normal Git-tracked files while still preflighting paths.
 - Symlinks are warned about and skipped. pi-sync does not follow symlinks, overwrite symlink targets, or write/delete through symlinked parents.
 - Checkout restores a previous commit locally without changing the remote branch; use `/pisync push` afterwards only if you want to publish that checked-out state as a new commit.
-- Auto-sync is enabled by default but never pushes local changes automatically; it only pulls safe remote changes or asks you to resolve conflicts manually.
+- Auto-sync is enabled by default. It pulls safe remote changes on session start and asks you to resolve conflicts manually. It only pushes local changes if `autoPush` (or `PI_SYNC_AUTO_PUSH`) is enabled; default is off. Auto-push still runs the secret scan and never force-pushes.
 - Secret scanning is best-effort. Do not intentionally store API keys or tokens in synced Pi config.
 
 ## Troubleshooting

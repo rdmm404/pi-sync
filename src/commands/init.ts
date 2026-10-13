@@ -68,8 +68,14 @@ async function promptConfig(
   const branch = await promptOptional(ctx, "Git branch", DEFAULT_BRANCH);
   const autoSync = await ctx.ui.confirm(
     "Enable auto-sync?",
-    "Auto-sync pulls safe remote changes on session start but never pushes local changes automatically.",
+    "Auto-sync pulls safe remote changes on session start and only pushes if auto-push is enabled (next prompt).",
   );
+  const autoPush = autoSync
+    ? await ctx.ui.confirm(
+        "Enable auto-push?",
+        "Auto-push publishes local changes on session start when the remote has not changed. Secret scan still applies.",
+      )
+    : false;
   const commitMessageModel = await promptOptional(
     ctx,
     "Commit message model (optional)",
@@ -80,6 +86,7 @@ async function promptConfig(
     repository,
     branch: branch === "" ? DEFAULT_BRANCH : branch,
     autoSync,
+    autoPush,
     ...(commitMessageModel === "" ? {} : { commitMessageModel }),
   };
 }
